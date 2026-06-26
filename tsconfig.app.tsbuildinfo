@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/clickhouse/client.ts","./src/components/citycanvas.tsx","./src/components/connectionscreen.tsx","./src/components/detailpanel.tsx","./src/components/legend.tsx","./src/data/mockdata.ts","./src/iso/iso.ts"],"version":"5.9.3"}

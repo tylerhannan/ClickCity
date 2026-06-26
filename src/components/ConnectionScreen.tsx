@@ -20,12 +20,6 @@ export default function ConnectionScreen({ onConnect, onMock, connecting, error 
     onConnect({ url: url.trim().replace(/\/$/, ''), user: user.trim(), password })
   }
 
-  function usePlayPreset() {
-    setUrl('https://play.clickhouse.com')
-    setUser('play')
-    setPassword('')
-  }
-
   return (
     <div className="connect-screen">
       <form className="connect-card" onSubmit={submit}>
@@ -78,9 +72,6 @@ export default function ConnectionScreen({ onConnect, onMock, connecting, error 
         <div className="actions">
           <button type="submit" className="primary" disabled={connecting}>
             {connecting ? 'Connecting…' : 'Connect'}
-          </button>
-          <button type="button" className="ghost" onClick={usePlayPreset} disabled={connecting}>
-            Use Play demo preset
           </button>
           <button type="button" className="ghost" onClick={onMock} disabled={connecting}>
             Explore with mock data

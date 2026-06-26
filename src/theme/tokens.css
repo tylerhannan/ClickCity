@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
   /* Typography */
   --font-sans: Inter, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -46,29 +46,29 @@
   --semantic-info: #4f8cff;
 }
 
-/* Light theme */
+/* Default theme (dark-first) */
 :root,
 :root[data-theme='light'] {
-  --bg-canvas: #f6f8fb;
-  --bg-page: #f4f6fa;
-  --bg-elevated: #ffffff;
-  --bg-subtle: #f1f4f8;
-  --border: #d8deea;
-  --text-primary: #111827;
-  --text-secondary: #4b5567;
-  --text-tertiary: #6f7a8f;
+  --bg-canvas: #0f1318;
+  --bg-page: #11161d;
+  --bg-elevated: #171c24;
+  --bg-subtle: #202734;
+  --border: #2e3746;
+  --text-primary: #f4f7ff;
+  --text-secondary: #c9d2e3;
+  --text-tertiary: #95a2ba;
 
   --btn-primary-bg: var(--brand-yellow);
-  --btn-primary-fg: #1f242d;
+  --btn-primary-fg: #161b1f;
   --btn-ghost-bg: transparent;
-  --btn-ghost-fg: #1f2937;
-  --btn-ghost-border: #ccd5e3;
+  --btn-ghost-fg: #dce5f5;
+  --btn-ghost-border: #3a4558;
 
-  --focus-ring: rgba(79, 140, 255, 0.35);
-  --shadow-card: 0 20px 60px rgba(17, 24, 39, 0.12);
-  --shadow-panel: -16px 0 36px rgba(17, 24, 39, 0.12);
+  --focus-ring: rgba(250, 255, 105, 0.32);
+  --shadow-card: 0 24px 72px rgba(0, 0, 0, 0.45);
+  --shadow-panel: -20px 0 50px rgba(0, 0, 0, 0.35);
 
-  --canvas-grid-glow: rgba(250, 255, 105, 0.08);
+  --canvas-grid-glow: rgba(250, 255, 105, 0.12);
 }
 
 /* Dark theme */

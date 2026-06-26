@@ -24,9 +24,10 @@ body {
   place-items: center;
   padding: var(--space-24);
   background:
-    radial-gradient(840px 440px at 18% 8%, rgba(0, 243, 255, 0.14) 0%, transparent 72%),
-    radial-gradient(780px 460px at 84% 18%, rgba(255, 61, 214, 0.12) 0%, transparent 74%),
-    linear-gradient(180deg, #12162b 0%, #0f1325 40%, #0a0f1d 100%);
+    radial-gradient(900px 520px at 20% 6%, rgba(41, 225, 255, 0.09) 0%, transparent 74%),
+    radial-gradient(920px 560px at 82% 16%, rgba(255, 72, 214, 0.08) 0%, transparent 78%),
+    radial-gradient(1500px 1000px at 50% 120%, rgba(63, 88, 134, 0.12) 0%, transparent 66%),
+    linear-gradient(180deg, #0a0f1f 0%, #070b17 46%, #04070f 100%);
 }
 
 .connect-card {
@@ -229,9 +230,10 @@ button:disabled {
   flex: 1;
   overflow: hidden;
   background:
-    radial-gradient(860px 380px at 74% 14%, rgba(0, 238, 255, 0.11) 0%, transparent 76%),
-    radial-gradient(780px 320px at 24% 22%, rgba(255, 74, 216, 0.11) 0%, transparent 78%),
-    linear-gradient(180deg, #0f1430 0%, #0b1026 46%, #0a1020 70%, #080d18 100%),
+    radial-gradient(820px 440px at 78% 12%, rgba(58, 230, 255, 0.08) 0%, transparent 76%),
+    radial-gradient(700px 320px at 26% 18%, rgba(255, 71, 211, 0.08) 0%, transparent 80%),
+    radial-gradient(1400px 920px at 46% 128%, rgba(74, 88, 118, 0.18) 0%, transparent 62%),
+    linear-gradient(180deg, #090d1d 0%, #060a15 44%, #050811 72%, #04070e 100%),
     var(--bg-canvas);
 }
 

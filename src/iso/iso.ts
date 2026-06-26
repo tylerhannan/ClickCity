@@ -10,7 +10,7 @@ export const TILE_W = 60
 export const TILE_H = 30
 // Extra gap between building footprints so the city reads with streets.
 const GRID_SPACING = 1.46
-const TOP_CORNER_RADIUS_RATIO = 0.4
+const TOP_CORNER_RADIUS_RATIO = 0.14
 
 // Block pixel-height range (before view scaling).
 const MIN_BLOCK_H = 24
@@ -47,12 +47,12 @@ export interface Geometry {
 
 // Engine → base color.
 export const ENGINE_COLORS: Record<EngineCategory, string> = {
-  MergeTree: '#3fa8ff',
-  MaterializedView: '#ff5bd6',
-  Dictionary: '#ffb65e',
-  Distributed: '#35f0ff',
-  View: '#84ff8e',
-  Other: '#9ca8ff',
+  MergeTree: '#2b3f57',
+  MaterializedView: '#452a57',
+  Dictionary: '#594230',
+  Distributed: '#235061',
+  View: '#2a574a',
+  Other: '#37405a',
 }
 
 export const ENGINE_LABELS: Record<EngineCategory, string> = {
@@ -248,7 +248,7 @@ function dbTintRgb(database: string): RGB {
     hash = (hash * 31 + database.charCodeAt(i)) >>> 0
   }
   const hue = hash % 360
-  return hslToRgb(hue / 360, 0.58, 0.6)
+  return hslToRgb(hue / 360, 0.44, 0.52)
 }
 
 function hslToRgb(h: number, s: number, l: number): RGB {
@@ -273,7 +273,7 @@ function hslToRgb(h: number, s: number, l: number): RGB {
 // Final top-face color: engine base, lightly tinted toward the database hue.
 function blockTopColor(node: TableNode): RGB {
   const base = hexToRgb(ENGINE_COLORS[node.category])
-  return mix(base, dbTintRgb(node.database), 0.36)
+  return mix(base, dbTintRgb(node.database), 0.18)
 }
 
 // The legend needs the same tint computation in CSS form.
@@ -302,6 +302,7 @@ export function drawScene(
   const geomByKey = new Map<string, Geometry>()
   for (const b of placed) geomByKey.set(tableKey(b.node), geometry(b, view))
 
+  drawAtmosphere(ctx, opts.nowMs)
   drawEdges(ctx, placed, geomByKey, opts, 'under')
   drawLots(ctx, order, geomByKey)
 
@@ -333,21 +334,21 @@ function drawCuboid(
   },
 ): void {
   const { sx, sy, w, h, H, topY } = g
-  const left = shade(top, 0.72)
-  const right = shade(top, 0.54)
+  const left = shade(top, 0.58)
+  const right = shade(top, 0.42)
   const pulse = activityPulse(state.key, state.nowMs)
   const glow = state.activityScore * pulse
   const accent = neonAccent(state.key)
 
-  // Concrete lot under each building so street gaps read clearly.
-  traceRoundedDiamond(ctx, sx, sy, w * 1.06, h * 1.06, h * 0.26)
-  ctx.fillStyle = 'rgba(78, 89, 106, 0.42)'
+  // Dark lot under each building so street gaps read like alleys.
+  traceRoundedDiamond(ctx, sx, sy, w * 1.04, h * 1.04, h * 0.12)
+  ctx.fillStyle = 'rgba(10, 14, 23, 0.58)'
   ctx.fill()
 
-  // Soft projected shadow gives a more playful "city block" look.
+  // Diffuse shadow for hazy depth.
   ctx.beginPath()
-  ctx.ellipse(sx + w * 0.18, sy + h * 0.72, w * 0.95, h * 0.52, 0, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(6, 10, 18, 0.16)'
+  ctx.ellipse(sx + w * 0.22, sy + h * 0.78, w * 1.02, h * 0.58, 0, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(2, 5, 12, 0.24)'
   ctx.fill()
 
   // Left front face.
@@ -359,7 +360,7 @@ function drawCuboid(
   ctx.closePath()
   ctx.fillStyle = rgbToCss(left)
   ctx.fill()
-  drawLeftFacadeWindows(ctx, g, state.hovered)
+  drawLeftFacadeWindows(ctx, g, state.key, state.hovered)
 
   // Right front face.
   ctx.beginPath()
@@ -370,14 +371,14 @@ function drawCuboid(
   ctx.closePath()
   ctx.fillStyle = rgbToCss(right)
   ctx.fill()
-  drawRightFacadeWindows(ctx, g, state.hovered)
+  drawRightFacadeWindows(ctx, g, state.key, state.hovered)
 
   // Top face.
   traceRoundedDiamond(ctx, sx, topY, w, h, Math.min(w, h) * TOP_CORNER_RADIUS_RATIO)
-  const lift = Math.min(0.38, glow * 0.32 + (state.hovered ? 0.25 : 0))
+  const lift = Math.min(0.24, glow * 0.2 + (state.hovered ? 0.14 : 0))
   const topGrad = ctx.createLinearGradient(sx - w * 0.6, topY - h, sx + w * 0.6, topY + h)
-  topGrad.addColorStop(0, rgbToCss(mix(top, { r: 255, g: 255, b: 255 }, 0.22 + lift * 0.6)))
-  topGrad.addColorStop(1, rgbToCss(shade(top, 0.92 - lift * 0.2)))
+  topGrad.addColorStop(0, rgbToCss(mix(top, { r: 190, g: 210, b: 232 }, 0.14 + lift * 0.4)))
+  topGrad.addColorStop(1, rgbToCss(shade(top, 0.72)))
   ctx.fillStyle = topGrad
   ctx.fill()
   drawRoofUnits(ctx, g, top, state.hovered)
@@ -387,17 +388,17 @@ function drawCuboid(
   ctx.moveTo(sx - w * 0.45, topY + h * 0.04)
   ctx.lineTo(sx + w * 0.45, topY - h * 0.14)
   ctx.lineWidth = 1
-  ctx.strokeStyle = 'rgba(255,255,255,0.26)'
+  ctx.strokeStyle = 'rgba(206, 234, 255, 0.2)'
   ctx.stroke()
 
   if (glow > 0.02) {
     // Activity halo is independent from size; it visualizes recent workload.
     ctx.save()
     ctx.globalAlpha = Math.min(0.85, glow * 0.95)
-    ctx.shadowColor = 'rgba(250, 255, 105, 0.95)'
-    ctx.shadowBlur = 10 + glow * 28
+    ctx.shadowColor = 'rgba(82, 239, 255, 0.85)'
+    ctx.shadowBlur = 8 + glow * 22
     ctx.lineWidth = 1.2 + glow * 1.6
-    ctx.strokeStyle = 'rgba(250, 255, 105, 0.75)'
+    ctx.strokeStyle = 'rgba(102, 240, 255, 0.58)'
     traceRoundedDiamond(ctx, sx, topY, w, h, Math.min(w, h) * TOP_CORNER_RADIUS_RATIO)
     ctx.stroke()
     ctx.restore()
@@ -406,8 +407,8 @@ function drawCuboid(
   // Edge outlines for a crisp pixel-art look.
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
-  ctx.lineWidth = state.selected ? 3.4 : state.hovered ? 2.6 : 1.6
-  ctx.strokeStyle = state.selected ? '#fff36b' : state.hovered ? rgbToCss(accent) : 'rgba(20, 26, 42, 0.55)'
+  ctx.lineWidth = state.selected ? 3 : state.hovered ? 2.2 : 1.35
+  ctx.strokeStyle = state.selected ? '#ffe77f' : state.hovered ? rgbToCss(accent) : 'rgba(18, 24, 38, 0.72)'
 
   // Top face outline.
   traceRoundedDiamond(ctx, sx, topY, w, h, Math.min(w, h) * TOP_CORNER_RADIUS_RATIO)
@@ -428,7 +429,7 @@ function drawCuboid(
     ctx.moveTo(sx + w * 0.1, topY - h * 0.12)
     ctx.lineTo(sx + w * 0.1, topY - h * 0.52)
     ctx.lineWidth = 1.15
-    ctx.strokeStyle = 'rgba(215, 243, 255, 0.86)'
+    ctx.strokeStyle = 'rgba(255, 72, 72, 0.76)'
     ctx.stroke()
   }
 }
@@ -442,17 +443,22 @@ function drawLots(
     const g = geomByKey.get(tableKey(b.node))
     if (!g) continue
     const { sx, sy, w, h } = g
-    traceRoundedDiamond(ctx, sx, sy, w * 1.12, h * 1.12, h * 0.28)
-    ctx.fillStyle = 'rgba(28, 35, 52, 0.22)'
+    traceRoundedDiamond(ctx, sx, sy, w * 1.12, h * 1.12, h * 0.1)
+    ctx.fillStyle = 'rgba(6, 10, 18, 0.36)'
     ctx.fill()
-    traceRoundedDiamond(ctx, sx, sy, w * 1.12, h * 1.12, h * 0.28)
+    traceRoundedDiamond(ctx, sx, sy, w * 1.12, h * 1.12, h * 0.1)
     ctx.lineWidth = 0.8
-    ctx.strokeStyle = 'rgba(138, 176, 220, 0.24)'
+    ctx.strokeStyle = 'rgba(88, 120, 162, 0.2)'
     ctx.stroke()
   }
 }
 
-function drawLeftFacadeWindows(ctx: CanvasRenderingContext2D, g: Geometry, hovered: boolean): void {
+function drawLeftFacadeWindows(
+  ctx: CanvasRenderingContext2D,
+  g: Geometry,
+  key: string,
+  hovered: boolean,
+): void {
   const { sx, sy, w, h, topY } = g
   ctx.save()
   ctx.beginPath()
@@ -463,28 +469,39 @@ function drawLeftFacadeWindows(ctx: CanvasRenderingContext2D, g: Geometry, hover
   ctx.closePath()
   ctx.clip()
 
-  const rowStep = Math.max(7, h * 0.38)
-  const colStep = Math.max(9, w * 0.2)
-  for (let y = topY + rowStep; y < sy + h - 1; y += rowStep) {
-    ctx.beginPath()
-    ctx.moveTo(sx - w + 1, y)
-    ctx.lineTo(sx - 1, y)
-    ctx.strokeStyle = hovered ? 'rgba(147, 233, 255, 0.6)' : 'rgba(175, 225, 255, 0.3)'
-    ctx.lineWidth = 0.9
-    ctx.stroke()
-  }
-  for (let x = sx - w + colStep; x < sx - 2; x += colStep) {
-    ctx.beginPath()
-    ctx.moveTo(x, topY + 1)
-    ctx.lineTo(x, sy + h - 1)
-    ctx.strokeStyle = 'rgba(26, 33, 45, 0.22)'
-    ctx.lineWidth = 0.8
-    ctx.stroke()
+  const rowStep = Math.max(9, h * 0.34)
+  const colStep = Math.max(8, w * 0.14)
+  const winW = Math.max(2.2, colStep * 0.46)
+  const winH = Math.max(2.2, rowStep * 0.22)
+  let row = 0
+  for (let y = topY + rowStep * 0.6; y < sy + h - rowStep * 0.35; y += rowStep) {
+    let col = 0
+    for (let x = sx - w + colStep * 0.55; x < sx - colStep * 0.25; x += colStep) {
+      const lit = stableUnit(`${key}:L:${row}:${col}`) > 0.62
+      const neon = stableUnit(`${key}:Ln:${row}:${col}`) > 0.94
+      if (lit || neon || hovered) {
+        ctx.fillStyle = neon
+          ? 'rgba(255, 81, 217, 0.78)'
+          : hovered
+            ? 'rgba(138, 236, 255, 0.66)'
+            : 'rgba(198, 225, 255, 0.58)'
+      } else {
+        ctx.fillStyle = 'rgba(14, 20, 32, 0.62)'
+      }
+      ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
+      col++
+    }
+    row++
   }
   ctx.restore()
 }
 
-function drawRightFacadeWindows(ctx: CanvasRenderingContext2D, g: Geometry, hovered: boolean): void {
+function drawRightFacadeWindows(
+  ctx: CanvasRenderingContext2D,
+  g: Geometry,
+  key: string,
+  hovered: boolean,
+): void {
   const { sx, sy, w, h, topY } = g
   ctx.save()
   ctx.beginPath()
@@ -495,47 +512,85 @@ function drawRightFacadeWindows(ctx: CanvasRenderingContext2D, g: Geometry, hove
   ctx.closePath()
   ctx.clip()
 
-  const rowStep = Math.max(7, h * 0.38)
-  const colStep = Math.max(9, w * 0.2)
-  for (let y = topY + rowStep; y < sy + h - 1; y += rowStep) {
-    ctx.beginPath()
-    ctx.moveTo(sx + 1, y)
-    ctx.lineTo(sx + w - 1, y)
-    ctx.strokeStyle = hovered ? 'rgba(255, 176, 238, 0.5)' : 'rgba(207, 228, 247, 0.24)'
-    ctx.lineWidth = 0.85
-    ctx.stroke()
-  }
-  for (let x = sx + colStep; x < sx + w - 2; x += colStep) {
-    ctx.beginPath()
-    ctx.moveTo(x, topY + 1)
-    ctx.lineTo(x, sy + h - 1)
-    ctx.strokeStyle = 'rgba(18, 24, 35, 0.2)'
-    ctx.lineWidth = 0.75
-    ctx.stroke()
+  const rowStep = Math.max(9, h * 0.34)
+  const colStep = Math.max(8, w * 0.14)
+  const winW = Math.max(2.2, colStep * 0.46)
+  const winH = Math.max(2.2, rowStep * 0.22)
+  let row = 0
+  for (let y = topY + rowStep * 0.6; y < sy + h - rowStep * 0.35; y += rowStep) {
+    let col = 0
+    for (let x = sx + colStep * 0.2; x < sx + w - colStep * 0.2; x += colStep) {
+      const lit = stableUnit(`${key}:R:${row}:${col}`) > 0.64
+      const neon = stableUnit(`${key}:Rn:${row}:${col}`) > 0.95
+      if (lit || neon || hovered) {
+        ctx.fillStyle = neon
+          ? 'rgba(65, 239, 255, 0.78)'
+          : hovered
+            ? 'rgba(255, 176, 240, 0.6)'
+            : 'rgba(188, 220, 248, 0.54)'
+      } else {
+        ctx.fillStyle = 'rgba(12, 18, 29, 0.62)'
+      }
+      ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
+      col++
+    }
+    row++
   }
   ctx.restore()
 }
 
 function drawRoofUnits(ctx: CanvasRenderingContext2D, g: Geometry, top: RGB, hovered: boolean): void {
   const { sx, w, h, topY } = g
-  const roofColor = mix(shade(top, 0.86), { r: 182, g: 192, b: 204 }, 0.52)
-  traceRoundedDiamond(ctx, sx + w * 0.06, topY - h * 0.08, w * 0.22, h * 0.22, h * 0.09)
+  const roofColor = mix(shade(top, 0.52), { r: 120, g: 130, b: 146 }, 0.3)
+  traceRoundedDiamond(ctx, sx + w * 0.06, topY - h * 0.08, w * 0.2, h * 0.18, h * 0.03)
   ctx.fillStyle = rgbToCss(roofColor)
   ctx.fill()
   ctx.lineWidth = 0.9
-  ctx.strokeStyle = hovered ? 'rgba(241, 249, 255, 0.78)' : 'rgba(50, 60, 75, 0.45)'
+  ctx.strokeStyle = hovered ? 'rgba(241, 249, 255, 0.7)' : 'rgba(28, 36, 52, 0.78)'
   ctx.stroke()
 
-  traceRoundedDiamond(ctx, sx - w * 0.26, topY + h * 0.01, w * 0.14, h * 0.14, h * 0.06)
-  ctx.fillStyle = 'rgba(165, 175, 190, 0.85)'
+  traceRoundedDiamond(ctx, sx - w * 0.26, topY + h * 0.01, w * 0.12, h * 0.12, h * 0.03)
+  ctx.fillStyle = 'rgba(108, 118, 134, 0.92)'
   ctx.fill()
 }
 
 function neonAccent(seed: string): RGB {
   const unit = stableUnit(seed)
-  // Neon band between cyan, magenta, and amber.
-  const hue = 0.53 + unit * 0.34
-  return hslToRgb(hue % 1, 0.9, 0.62)
+  // Neon band between cyan and magenta.
+  const hue = 0.52 + unit * 0.26
+  return hslToRgb(hue % 1, 0.82, 0.62)
+}
+
+function drawAtmosphere(ctx: CanvasRenderingContext2D, nowMs: number): void {
+  const cw = ctx.canvas.width
+  const ch = ctx.canvas.height
+  const fog = ctx.createRadialGradient(cw * 0.64, ch * 0.38, ch * 0.08, cw * 0.62, ch * 0.52, ch * 0.9)
+  fog.addColorStop(0, 'rgba(34, 18, 70, 0.24)')
+  fog.addColorStop(0.45, 'rgba(12, 20, 44, 0.18)')
+  fog.addColorStop(1, 'rgba(4, 8, 18, 0.62)')
+  ctx.fillStyle = fog
+  ctx.fillRect(0, 0, cw, ch)
+
+  const haze = ctx.createLinearGradient(0, ch * 0.2, 0, ch)
+  haze.addColorStop(0, 'rgba(18, 27, 48, 0.08)')
+  haze.addColorStop(1, 'rgba(7, 10, 18, 0.35)')
+  ctx.fillStyle = haze
+  ctx.fillRect(0, 0, cw, ch)
+
+  // Sparse rain streaks for cyberpunk atmosphere.
+  ctx.save()
+  ctx.strokeStyle = 'rgba(170, 208, 255, 0.08)'
+  ctx.lineWidth = 1
+  const drift = nowMs * 0.015
+  for (let i = 0; i < 70; i++) {
+    const x = ((i * 97.13 + drift * 1.7) % (cw + 80)) - 40
+    const y = ((i * 53.79 + drift * 2.6) % (ch + 120)) - 60
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(x - 6, y + 16)
+    ctx.stroke()
+  }
+  ctx.restore()
 }
 
 function traceRoundedDiamond(

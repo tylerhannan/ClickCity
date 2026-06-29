@@ -45,6 +45,17 @@ export interface Geometry {
   hull: Array<[number, number]>
 }
 
+interface SceneBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+  centerX: number
+  centerY: number
+  width: number
+  height: number
+}
+
 // Engine → base color.
 export const ENGINE_COLORS: Record<EngineCategory, string> = {
   MergeTree: '#2b3f57',
@@ -181,17 +192,9 @@ export function fitView(placed: PlacedBlock[], cw: number, ch: number): View {
   let minY = Infinity
   let maxX = -Infinity
   let maxY = -Infinity
-  let maxHeight = 0
   for (const b of placed) {
-    if (b.heightPx > maxHeight) maxHeight = b.heightPx
     const g = geometry(b, base)
-    const ground: Array<[number, number]> = [
-      [g.sx, g.sy - g.h],
-      [g.sx + g.w, g.sy],
-      [g.sx, g.sy + g.h],
-      [g.sx - g.w, g.sy],
-    ]
-    for (const [x, y] of ground) {
+    for (const [x, y] of g.hull) {
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
@@ -201,13 +204,13 @@ export function fitView(placed: PlacedBlock[], cw: number, ch: number): View {
 
   const contentW = Math.max(1, maxX - minX)
   const contentH = Math.max(1, maxY - minY)
-  const scale = Math.min((cw / contentW) * 0.92, (ch / contentH) * 0.86, 2.05)
+  const scale = Math.min((cw / contentW) * 0.9, (ch / contentH) * 0.82, 2.05)
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
   return {
     offsetX: cw / 2 - centerX * scale,
-    // Leave extra headroom so tall buildings remain visible at first fit.
-    offsetY: ch * 0.62 - centerY * scale + maxHeight * scale * 0.2,
+    // Bias slightly low so rooftops have air while the city still sits in frame.
+    offsetY: ch * 0.52 - centerY * scale,
     scale,
   }
 }
@@ -227,6 +230,10 @@ function hexToRgb(hex: string): RGB {
 
 function rgbToCss({ r, g, b }: RGB): string {
   return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`
+}
+
+function rgbToRgba({ r, g, b }: RGB, a: number): string {
+  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${a})`
 }
 
 function mix(a: RGB, b: RGB, t: number): RGB {
@@ -301,8 +308,10 @@ export function drawScene(
   // Pre-compute geometry per key for edge drawing.
   const geomByKey = new Map<string, Geometry>()
   for (const b of placed) geomByKey.set(tableKey(b.node), geometry(b, view))
+  const bounds = sceneBounds(geomByKey)
 
-  drawAtmosphere(ctx, opts.nowMs)
+  drawAtmosphere(ctx, opts.nowMs, bounds)
+  drawCityPlane(ctx, placed, view, bounds, opts.nowMs)
   drawEdges(ctx, placed, geomByKey, opts, 'under')
   drawLots(ctx, order, geomByKey)
 
@@ -319,6 +328,39 @@ export function drawScene(
   }
 
   drawEdges(ctx, placed, geomByKey, opts, 'over')
+}
+
+function sceneBounds(geomByKey: Map<string, Geometry>): SceneBounds {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const g of geomByKey.values()) {
+    for (const [x, y] of g.hull) {
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+  }
+  if (!Number.isFinite(minX)) {
+    minX = 0
+    minY = 0
+    maxX = 1
+    maxY = 1
+  }
+  const width = Math.max(1, maxX - minX)
+  const height = Math.max(1, maxY - minY)
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width,
+    height,
+    centerX: minX + width / 2,
+    centerY: minY + height / 2,
+  }
 }
 
 function drawCuboid(
@@ -381,7 +423,7 @@ function drawCuboid(
   topGrad.addColorStop(1, rgbToCss(shade(top, 0.72)))
   ctx.fillStyle = topGrad
   ctx.fill()
-  drawRoofUnits(ctx, g, top, state.hovered)
+  drawRoofUnits(ctx, g, top, state.hovered, state.key)
 
   // Tiny top highlight to make blocks feel less flat.
   ctx.beginPath()
@@ -443,13 +485,26 @@ function drawLots(
     const g = geomByKey.get(tableKey(b.node))
     if (!g) continue
     const { sx, sy, w, h } = g
+    const district = dbTintRgb(b.node.database)
+    const lotFill = mix({ r: 8, g: 13, b: 24 }, district, 0.16)
     traceRoundedDiamond(ctx, sx, sy, w * 1.12, h * 1.12, h * 0.1)
-    ctx.fillStyle = 'rgba(6, 10, 18, 0.36)'
+    ctx.fillStyle = rgbToRgba(lotFill, 0.46)
     ctx.fill()
     traceRoundedDiamond(ctx, sx, sy, w * 1.12, h * 1.12, h * 0.1)
     ctx.lineWidth = 0.8
-    ctx.strokeStyle = 'rgba(88, 120, 162, 0.2)'
+    ctx.strokeStyle = rgbToRgba(mix(district, { r: 160, g: 210, b: 255 }, 0.22), 0.22)
     ctx.stroke()
+
+    const stripe = stableUnit(`${tableKey(b.node)}:lot-stripe`)
+    if (stripe > 0.46) {
+      ctx.beginPath()
+      ctx.moveTo(sx - w * 0.72, sy + h * 0.2)
+      ctx.lineTo(sx - w * 0.18, sy + h * 0.47)
+      ctx.lineWidth = 1.1
+      ctx.strokeStyle =
+        stripe > 0.74 ? 'rgba(245, 70, 224, 0.34)' : 'rgba(75, 228, 255, 0.28)'
+      ctx.stroke()
+    }
   }
 }
 
@@ -539,7 +594,13 @@ function drawRightFacadeWindows(
   ctx.restore()
 }
 
-function drawRoofUnits(ctx: CanvasRenderingContext2D, g: Geometry, top: RGB, hovered: boolean): void {
+function drawRoofUnits(
+  ctx: CanvasRenderingContext2D,
+  g: Geometry,
+  top: RGB,
+  hovered: boolean,
+  key: string,
+): void {
   const { sx, w, h, topY } = g
   const roofColor = mix(shade(top, 0.52), { r: 120, g: 130, b: 146 }, 0.3)
   traceRoundedDiamond(ctx, sx + w * 0.06, topY - h * 0.08, w * 0.2, h * 0.18, h * 0.03)
@@ -552,6 +613,32 @@ function drawRoofUnits(ctx: CanvasRenderingContext2D, g: Geometry, top: RGB, hov
   traceRoundedDiamond(ctx, sx - w * 0.26, topY + h * 0.01, w * 0.12, h * 0.12, h * 0.03)
   ctx.fillStyle = 'rgba(108, 118, 134, 0.92)'
   ctx.fill()
+
+  const stripe = stableUnit(`${key}:roof-stripe`)
+  if (stripe > 0.36) {
+    const accent = stripe > 0.68 ? 'rgba(255, 69, 218, 0.58)' : 'rgba(69, 229, 255, 0.52)'
+    ctx.beginPath()
+    ctx.moveTo(sx - w * 0.46, topY + h * 0.08)
+    ctx.lineTo(sx + w * 0.22, topY - h * 0.18)
+    ctx.lineWidth = 1
+    ctx.strokeStyle = accent
+    ctx.stroke()
+  }
+
+  if (stableUnit(`${key}:antenna`) > 0.72) {
+    const ax = sx + w * (stableUnit(`${key}:antenna-x`) * 0.42 - 0.12)
+    const ay = topY - h * (0.05 + stableUnit(`${key}:antenna-y`) * 0.28)
+    ctx.beginPath()
+    ctx.moveTo(ax, ay)
+    ctx.lineTo(ax, ay - h * 0.34)
+    ctx.lineWidth = 0.9
+    ctx.strokeStyle = 'rgba(205, 223, 255, 0.58)'
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(ax, ay - h * 0.36, 1.4, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(255, 90, 90, 0.82)'
+    ctx.fill()
+  }
 }
 
 function neonAccent(seed: string): RGB {
@@ -561,28 +648,40 @@ function neonAccent(seed: string): RGB {
   return hslToRgb(hue % 1, 0.82, 0.62)
 }
 
-function drawAtmosphere(ctx: CanvasRenderingContext2D, nowMs: number): void {
-  const cw = ctx.canvas.width
-  const ch = ctx.canvas.height
-  const fog = ctx.createRadialGradient(cw * 0.64, ch * 0.38, ch * 0.08, cw * 0.62, ch * 0.52, ch * 0.9)
-  fog.addColorStop(0, 'rgba(34, 18, 70, 0.24)')
-  fog.addColorStop(0.45, 'rgba(12, 20, 44, 0.18)')
-  fog.addColorStop(1, 'rgba(4, 8, 18, 0.62)')
+function drawAtmosphere(ctx: CanvasRenderingContext2D, nowMs: number, bounds: SceneBounds): void {
+  const { cw, ch } = canvasCssSize(ctx)
+  const cityGlowX = Number.isFinite(bounds.centerX) ? bounds.centerX : cw * 0.62
+  const cityGlowY = Number.isFinite(bounds.centerY) ? bounds.centerY : ch * 0.52
+
+  const fog = ctx.createRadialGradient(
+    cityGlowX + bounds.width * 0.18,
+    cityGlowY - bounds.height * 0.22,
+    Math.max(16, bounds.height * 0.08),
+    cityGlowX,
+    cityGlowY,
+    Math.max(cw, ch) * 0.78,
+  )
+  fog.addColorStop(0, 'rgba(24, 57, 76, 0.26)')
+  fog.addColorStop(0.45, 'rgba(9, 24, 39, 0.22)')
+  fog.addColorStop(1, 'rgba(2, 6, 12, 0.68)')
   ctx.fillStyle = fog
   ctx.fillRect(0, 0, cw, ch)
 
-  const haze = ctx.createLinearGradient(0, ch * 0.2, 0, ch)
-  haze.addColorStop(0, 'rgba(18, 27, 48, 0.08)')
-  haze.addColorStop(1, 'rgba(7, 10, 18, 0.35)')
-  ctx.fillStyle = haze
+  const horizon = ctx.createLinearGradient(0, 0, 0, ch)
+  horizon.addColorStop(0, 'rgba(5, 13, 24, 0.2)')
+  horizon.addColorStop(0.5, 'rgba(7, 15, 24, 0.08)')
+  horizon.addColorStop(1, 'rgba(1, 5, 9, 0.58)')
+  ctx.fillStyle = horizon
   ctx.fillRect(0, 0, cw, ch)
+
+  drawFarHaze(ctx, bounds, nowMs)
 
   // Sparse rain streaks for cyberpunk atmosphere.
   ctx.save()
   ctx.strokeStyle = 'rgba(170, 208, 255, 0.08)'
   ctx.lineWidth = 1
   const drift = nowMs * 0.015
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < 86; i++) {
     const x = ((i * 97.13 + drift * 1.7) % (cw + 80)) - 40
     const y = ((i * 53.79 + drift * 2.6) % (ch + 120)) - 60
     ctx.beginPath()
@@ -591,6 +690,170 @@ function drawAtmosphere(ctx: CanvasRenderingContext2D, nowMs: number): void {
     ctx.stroke()
   }
   ctx.restore()
+}
+
+function canvasCssSize(ctx: CanvasRenderingContext2D): { cw: number; ch: number } {
+  const transform = ctx.getTransform()
+  const scaleX = transform.a || 1
+  const scaleY = transform.d || 1
+  return {
+    cw: ctx.canvas.width / scaleX,
+    ch: ctx.canvas.height / scaleY,
+  }
+}
+
+function drawFarHaze(
+  ctx: CanvasRenderingContext2D,
+  bounds: SceneBounds,
+  nowMs: number,
+): void {
+  const { cw, ch } = canvasCssSize(ctx)
+  const baseY = Math.max(ch * 0.25, bounds.minY + bounds.height * 0.28)
+  ctx.save()
+  ctx.globalCompositeOperation = 'screen'
+  for (let i = 0; i < 7; i++) {
+    const unit = stableUnit(`haze:${i}`)
+    const x = (unit * 1.4 - 0.2) * cw + Math.sin(nowMs * 0.00008 + i) * 10
+    const y = baseY + i * 26
+    const w = cw * (0.18 + stableUnit(`haze:w:${i}`) * 0.22)
+    const grad = ctx.createRadialGradient(x, y, 4, x, y, w)
+    grad.addColorStop(0, i % 2 === 0 ? 'rgba(67, 213, 255, 0.08)' : 'rgba(88, 177, 196, 0.065)')
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(x - w, y - 48, w * 2, 96)
+  }
+  ctx.restore()
+}
+
+function drawCityPlane(
+  ctx: CanvasRenderingContext2D,
+  placed: PlacedBlock[],
+  view: View,
+  bounds: SceneBounds,
+  nowMs: number,
+): void {
+  if (placed.length === 0) return
+
+  const minGx = Math.floor(Math.min(...placed.map((b) => b.gx))) - 1
+  const maxGx = Math.ceil(Math.max(...placed.map((b) => b.gx))) + 2
+  const minGy = Math.floor(Math.min(...placed.map((b) => b.gy))) - 1
+  const maxGy = Math.ceil(Math.max(...placed.map((b) => b.gy))) + 2
+  const corners = [
+    projectGrid(minGx, minGy, view),
+    projectGrid(maxGx, minGy, view),
+    projectGrid(maxGx, maxGy, view),
+    projectGrid(minGx, maxGy, view),
+  ]
+
+  ctx.save()
+  const floorGlow = ctx.createRadialGradient(
+    bounds.centerX,
+    bounds.maxY - bounds.height * 0.2,
+    10,
+    bounds.centerX,
+    bounds.maxY,
+    Math.max(bounds.width, bounds.height) * 0.82,
+  )
+  floorGlow.addColorStop(0, 'rgba(54, 229, 255, 0.12)')
+  floorGlow.addColorStop(0.38, 'rgba(56, 126, 150, 0.08)')
+  floorGlow.addColorStop(1, 'rgba(0, 0, 0, 0)')
+  ctx.fillStyle = floorGlow
+  ctx.fillRect(bounds.minX - bounds.width * 0.35, bounds.minY, bounds.width * 1.7, bounds.height * 1.25)
+
+  ctx.beginPath()
+  corners.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p.x, p.y)
+    else ctx.lineTo(p.x, p.y)
+  })
+  ctx.closePath()
+  const slab = ctx.createLinearGradient(0, bounds.minY, 0, bounds.maxY)
+  slab.addColorStop(0, 'rgba(14, 27, 39, 0.2)')
+  slab.addColorStop(1, 'rgba(4, 10, 16, 0.3)')
+  ctx.fillStyle = slab
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(93, 139, 190, 0.18)'
+  ctx.lineWidth = 1
+  ctx.stroke()
+
+  ctx.clip()
+  drawStreetGrid(ctx, minGx, maxGx, minGy, maxGy, view, nowMs)
+  drawWetGroundSheen(ctx, bounds, nowMs)
+  ctx.restore()
+}
+
+function drawStreetGrid(
+  ctx: CanvasRenderingContext2D,
+  minGx: number,
+  maxGx: number,
+  minGy: number,
+  maxGy: number,
+  view: View,
+  nowMs: number,
+): void {
+  ctx.save()
+  ctx.lineCap = 'round'
+  for (let gx = minGx; gx <= maxGx; gx++) {
+    const p1 = projectGrid(gx, minGy, view)
+    const p2 = projectGrid(gx, maxGy, view)
+    const major = gx % 4 === 0
+    const shimmer = 0.02 * Math.sin(nowMs * 0.001 + gx)
+    ctx.beginPath()
+    ctx.moveTo(p1.x, p1.y)
+    ctx.lineTo(p2.x, p2.y)
+    ctx.lineWidth = major ? 1.35 : 0.7
+    ctx.strokeStyle = major
+      ? `rgba(66, 220, 255, ${0.16 + shimmer})`
+      : 'rgba(84, 118, 166, 0.08)'
+    ctx.stroke()
+  }
+  for (let gy = minGy; gy <= maxGy; gy++) {
+    const p1 = projectGrid(minGx, gy, view)
+    const p2 = projectGrid(maxGx, gy, view)
+    const major = gy % 5 === 0
+    const shimmer = 0.02 * Math.cos(nowMs * 0.001 + gy)
+    ctx.beginPath()
+    ctx.moveTo(p1.x, p1.y)
+    ctx.lineTo(p2.x, p2.y)
+    ctx.lineWidth = major ? 1.25 : 0.7
+    ctx.strokeStyle = major
+      ? `rgba(92, 176, 188, ${0.11 + shimmer})`
+      : 'rgba(78, 117, 143, 0.07)'
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawWetGroundSheen(
+  ctx: CanvasRenderingContext2D,
+  bounds: SceneBounds,
+  nowMs: number,
+): void {
+  ctx.save()
+  ctx.globalCompositeOperation = 'screen'
+  for (let i = 0; i < 44; i++) {
+    const x = bounds.minX + stableUnit(`sheen:x:${i}`) * bounds.width
+    const y = bounds.minY + bounds.height * (0.24 + stableUnit(`sheen:y:${i}`) * 0.72)
+    const len = 14 + stableUnit(`sheen:l:${i}`) * 42
+    const alpha = 0.045 + stableUnit(`sheen:a:${i}`) * 0.055
+    const phase = 0.75 + Math.sin(nowMs * 0.0014 + i) * 0.25
+    ctx.beginPath()
+    ctx.moveTo(x - len * 0.5, y)
+    ctx.lineTo(x + len * 0.5, y - len * 0.18)
+    ctx.lineWidth = 0.8
+    ctx.strokeStyle =
+      i % 3 === 0
+        ? `rgba(126, 207, 201, ${alpha * phase})`
+        : `rgba(90, 224, 255, ${alpha * phase})`
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function projectGrid(gx: number, gy: number, view: View): { x: number; y: number } {
+  return {
+    x: view.offsetX + (gx - gy) * TILE_W * GRID_SPACING * view.scale,
+    y: view.offsetY + (gx + gy) * TILE_H * GRID_SPACING * view.scale,
+  }
 }
 
 function traceRoundedDiamond(

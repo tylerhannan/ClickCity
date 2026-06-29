@@ -230,10 +230,10 @@ button:disabled {
   flex: 1;
   overflow: hidden;
   background:
-    radial-gradient(820px 440px at 78% 12%, rgba(58, 230, 255, 0.08) 0%, transparent 76%),
-    radial-gradient(700px 320px at 26% 18%, rgba(255, 71, 211, 0.08) 0%, transparent 80%),
-    radial-gradient(1400px 920px at 46% 128%, rgba(74, 88, 118, 0.18) 0%, transparent 62%),
-    linear-gradient(180deg, #090d1d 0%, #060a15 44%, #050811 72%, #04070e 100%),
+    radial-gradient(820px 440px at 78% 12%, rgba(58, 219, 255, 0.07) 0%, transparent 76%),
+    radial-gradient(760px 360px at 24% 18%, rgba(86, 151, 166, 0.08) 0%, transparent 82%),
+    radial-gradient(1400px 920px at 46% 128%, rgba(57, 86, 101, 0.2) 0%, transparent 62%),
+    linear-gradient(180deg, #07101b 0%, #050d16 44%, #040911 72%, #03070d 100%),
     var(--bg-canvas);
 }
 

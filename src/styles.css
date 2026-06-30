@@ -289,6 +289,16 @@ button:disabled {
   box-shadow: 0 0 12px rgba(250, 255, 105, 0.6);
 }
 
+.swatch.read {
+  background: #53e5ff;
+  box-shadow: 0 0 10px rgba(83, 229, 255, 0.46);
+}
+
+.swatch.write {
+  background: #ff4dda;
+  box-shadow: 0 0 10px rgba(255, 77, 218, 0.42);
+}
+
 /* Detail panel */
 .detail-panel {
   position: absolute;

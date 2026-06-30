@@ -32,8 +32,16 @@ export default function Legend({ tables }: { tables: TableNode[] }) {
         <div className="legend-group">
           <div className="legend-head">Activity</div>
           <div className="legend-row">
+            <span className="swatch read" />
+            Cyan windows = rows read
+          </div>
+          <div className="legend-row">
+            <span className="swatch write" />
+            Magenta windows = rows written
+          </div>
+          <div className="legend-row">
             <span className="swatch activity" />
-            Pulse glow = query-log activity
+            Pulse = recent query-log activity
           </div>
         </div>
       )}

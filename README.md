@@ -3,8 +3,9 @@
 An isometric voxel **schema visualizer for ClickHouse**. Point it at a ClickHouse
 HTTP endpoint and it renders your databases as a little pixel-art city: every table
 is a block, block height is the log-scaled on-disk size, block color is the table
-engine, and dependency edges (materialized-view chains, `Distributed` tables) are
-drawn as isometric connectors. Click a block to inspect the table.
+engine, dependency edges (materialized-view chains, `Distributed` tables) are
+drawn as isometric connectors, and building lights show recent read/write workload.
+Click a block to inspect the table.
 
 Pure frontend — no backend. The browser queries `system.tables` and `system.parts`
 directly over the ClickHouse HTTP interface. Deploys as a static site to GitHub Pages.
@@ -26,6 +27,51 @@ npm run dev      # http://localhost:5173
 You don't need a running ClickHouse to work on the visuals: on the connection
 screen click **Explore with mock data** (`src/data/mockData.ts`).
 
+## What the visualization means
+
+ClickCity is a map of ClickHouse schema shape and recent workload:
+
+- **One building = one table-like object** from `system.tables`, including tables,
+  views, materialized views, dictionaries, and distributed tables.
+- **Neighborhoods = databases.** Tables are grouped by database, and each database
+  gets a subtle tint so separate schemas read as separate districts.
+- **Building height = table footprint.** Height uses a log scale from
+  `system.parts.bytes_on_disk`; if parts are unavailable, ClickCity falls back to
+  `system.tables.total_bytes` / `total_rows`.
+- **Building top color = engine family.** MergeTree, Materialized View, Dictionary,
+  Distributed, View, and Other each get their own color bucket.
+- **Connector lines = dependencies.** These come from
+  `system.tables.dependencies_database` and `dependencies_table`; they make
+  materialized-view chains and distributed-table relationships visible.
+- **Cyan windows = rows read recently.** Read heat comes from
+  `system.query_log.rows_read`, normalized on a log scale against the busiest table.
+- **Magenta windows = rows written recently.** Write heat comes from
+  `system.query_log.written_rows`, also log-normalized.
+- **Window brightness/density = workload intensity.** Query count from
+  `system.query_log` boosts brightness, while rows read/written control how many
+  windows light up on each face.
+- **Pulse/halo = combined recent activity.** The glow combines query count,
+  throughput, and peak memory from `system.query_log`. If query-log access is
+  denied or disabled, workload lights stay mostly dark rather than inventing data.
+- **Red roof beacon = very large table.** Tall buildings get a small beacon so the
+  biggest storage objects remain easy to spot.
+
+### Mock data example
+
+The built-in mock city is designed to exercise those meanings:
+
+- `analytics.events` is one of the tallest buildings and should show strong cyan
+  read heat because the mock workload reads 18.4B rows recently.
+- `staging.raw_events` is also tall, but its magenta write lights dominate because
+  the mock workload writes 7.9B rows recently.
+- `analytics.daily_rollup_mv`, `staging.raw_events_mv`, and `shop.revenue_mv` are
+  Materialized View buildings with connector lines to the tables they depend on.
+- `analytics.events_dist` is a short Distributed building connected back to
+  `analytics.events`, showing that it is important in query flow even though it
+  does not own much storage.
+- Smaller dimension-style objects like `analytics.geo_dict` stay shorter and
+  dimmer unless their mock activity is high.
+
 ## Connecting to ClickHouse
 
 On the connection screen enter the HTTP endpoint, user, and password:
@@ -39,7 +85,7 @@ page's origin via **CORS**. ClickCity already appends `add_http_cors_header=1` t
 each request, which makes self-hosted servers emit `Access-Control-Allow-Origin: *`.
 For ClickHouse Cloud, add the site's origin to the service's allowed CORS origins.
 
-### The two queries
+### The schema and workload queries
 
 `src/clickhouse/client.ts`:
 
@@ -47,6 +93,10 @@ For ClickHouse Cloud, add the site's origin to the service's allowed CORS origin
    `dependencies_database` / `dependencies_table` arrays used to draw edges).
 2. **Parts** — `sum(bytes_on_disk)` and `sum(rows)` over active parts in
    `system.parts`, grouped by `(database, table)`, used for block height.
+3. **Table totals fallback** — `system.tables.total_rows` and `total_bytes`, used
+   when `system.parts` is restricted or sparse.
+4. **Recent activity** — optional aggregates from `system.query_log` over the last
+   30 minutes, used for cyan read windows, magenta write windows, and pulse glow.
 
 Columns shown in the detail panel are fetched lazily from `system.columns` when a
 block is selected.

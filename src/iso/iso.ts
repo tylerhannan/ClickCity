@@ -56,6 +56,19 @@ interface SceneBounds {
   height: number
 }
 
+interface WorkloadScale {
+  maxRowsRead: number
+  maxRowsWritten: number
+  maxQueryCount: number
+}
+
+interface WorkloadVisual {
+  readIntensity: number
+  writeIntensity: number
+  queryIntensity: number
+  activityScore: number
+}
+
 // Engine → base color.
 export const ENGINE_COLORS: Record<EngineCategory, string> = {
   MergeTree: '#2b3f57',
@@ -309,6 +322,7 @@ export function drawScene(
   const geomByKey = new Map<string, Geometry>()
   for (const b of placed) geomByKey.set(tableKey(b.node), geometry(b, view))
   const bounds = sceneBounds(geomByKey)
+  const workloadScale = computeWorkloadScale(placed)
 
   drawAtmosphere(ctx, opts.nowMs, bounds)
   drawCityPlane(ctx, placed, view, bounds, opts.nowMs)
@@ -322,6 +336,7 @@ export function drawScene(
       key,
       nowMs: opts.nowMs,
       activityScore: b.node.activity?.activityScore ?? 0,
+      workload: workloadForNode(b.node, workloadScale),
       selected: key === opts.selectedKey,
       hovered: key === opts.hoveredKey,
     })
@@ -363,6 +378,38 @@ function sceneBounds(geomByKey: Map<string, Geometry>): SceneBounds {
   }
 }
 
+function computeWorkloadScale(placed: PlacedBlock[]): WorkloadScale {
+  let maxRowsRead = 0
+  let maxRowsWritten = 0
+  let maxQueryCount = 0
+  for (const b of placed) {
+    const a = b.node.activity
+    if (!a) continue
+    if (a.rowsRead > maxRowsRead) maxRowsRead = a.rowsRead
+    if (a.rowsWritten > maxRowsWritten) maxRowsWritten = a.rowsWritten
+    if (a.queryCount > maxQueryCount) maxQueryCount = a.queryCount
+  }
+  return { maxRowsRead, maxRowsWritten, maxQueryCount }
+}
+
+function workloadForNode(node: TableNode, scale: WorkloadScale): WorkloadVisual {
+  const a = node.activity
+  if (!a) {
+    return { readIntensity: 0, writeIntensity: 0, queryIntensity: 0, activityScore: 0 }
+  }
+  return {
+    readIntensity: logIntensity(a.rowsRead, scale.maxRowsRead),
+    writeIntensity: logIntensity(a.rowsWritten, scale.maxRowsWritten),
+    queryIntensity: logIntensity(a.queryCount, scale.maxQueryCount),
+    activityScore: a.activityScore,
+  }
+}
+
+function logIntensity(value: number, max: number): number {
+  if (!Number.isFinite(value) || !Number.isFinite(max) || value <= 0 || max <= 0) return 0
+  return Math.max(0, Math.min(1, Math.log10(value + 1) / Math.log10(max + 1)))
+}
+
 function drawCuboid(
   ctx: CanvasRenderingContext2D,
   g: Geometry,
@@ -371,6 +418,7 @@ function drawCuboid(
     key: string
     nowMs: number
     activityScore: number
+    workload: WorkloadVisual
     selected: boolean
     hovered: boolean
   },
@@ -402,7 +450,7 @@ function drawCuboid(
   ctx.closePath()
   ctx.fillStyle = rgbToCss(left)
   ctx.fill()
-  drawLeftFacadeWindows(ctx, g, state.key, state.hovered)
+  drawLeftFacadeWindows(ctx, g, state.key, state.nowMs, state.workload, state.hovered)
 
   // Right front face.
   ctx.beginPath()
@@ -413,7 +461,7 @@ function drawCuboid(
   ctx.closePath()
   ctx.fillStyle = rgbToCss(right)
   ctx.fill()
-  drawRightFacadeWindows(ctx, g, state.key, state.hovered)
+  drawRightFacadeWindows(ctx, g, state.key, state.nowMs, state.workload, state.hovered)
 
   // Top face.
   traceRoundedDiamond(ctx, sx, topY, w, h, Math.min(w, h) * TOP_CORNER_RADIUS_RATIO)
@@ -423,7 +471,7 @@ function drawCuboid(
   topGrad.addColorStop(1, rgbToCss(shade(top, 0.72)))
   ctx.fillStyle = topGrad
   ctx.fill()
-  drawRoofUnits(ctx, g, top, state.hovered, state.key)
+  drawRoofUnits(ctx, g, top, state.hovered, state.key, state.workload)
 
   // Tiny top highlight to make blocks feel less flat.
   ctx.beginPath()
@@ -512,6 +560,8 @@ function drawLeftFacadeWindows(
   ctx: CanvasRenderingContext2D,
   g: Geometry,
   key: string,
+  nowMs: number,
+  workload: WorkloadVisual,
   hovered: boolean,
 ): void {
   const { sx, sy, w, h, topY } = g
@@ -532,17 +582,16 @@ function drawLeftFacadeWindows(
   for (let y = topY + rowStep * 0.6; y < sy + h - rowStep * 0.35; y += rowStep) {
     let col = 0
     for (let x = sx - w + colStep * 0.55; x < sx - colStep * 0.25; x += colStep) {
-      const lit = stableUnit(`${key}:L:${row}:${col}`) > 0.62
-      const neon = stableUnit(`${key}:Ln:${row}:${col}`) > 0.94
-      if (lit || neon || hovered) {
-        ctx.fillStyle = neon
-          ? 'rgba(255, 81, 217, 0.78)'
-          : hovered
-            ? 'rgba(138, 236, 255, 0.66)'
-            : 'rgba(198, 225, 255, 0.58)'
-      } else {
-        ctx.fillStyle = 'rgba(14, 20, 32, 0.62)'
-      }
+      ctx.fillStyle = workloadWindowColor({
+        key,
+        row,
+        col,
+        side: 'read',
+        metricIntensity: workload.readIntensity,
+        queryIntensity: workload.queryIntensity,
+        nowMs,
+        hovered,
+      })
       ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
       col++
     }
@@ -555,6 +604,8 @@ function drawRightFacadeWindows(
   ctx: CanvasRenderingContext2D,
   g: Geometry,
   key: string,
+  nowMs: number,
+  workload: WorkloadVisual,
   hovered: boolean,
 ): void {
   const { sx, sy, w, h, topY } = g
@@ -575,17 +626,16 @@ function drawRightFacadeWindows(
   for (let y = topY + rowStep * 0.6; y < sy + h - rowStep * 0.35; y += rowStep) {
     let col = 0
     for (let x = sx + colStep * 0.2; x < sx + w - colStep * 0.2; x += colStep) {
-      const lit = stableUnit(`${key}:R:${row}:${col}`) > 0.64
-      const neon = stableUnit(`${key}:Rn:${row}:${col}`) > 0.95
-      if (lit || neon || hovered) {
-        ctx.fillStyle = neon
-          ? 'rgba(65, 239, 255, 0.78)'
-          : hovered
-            ? 'rgba(255, 176, 240, 0.6)'
-            : 'rgba(188, 220, 248, 0.54)'
-      } else {
-        ctx.fillStyle = 'rgba(12, 18, 29, 0.62)'
-      }
+      ctx.fillStyle = workloadWindowColor({
+        key,
+        row,
+        col,
+        side: 'write',
+        metricIntensity: workload.writeIntensity,
+        queryIntensity: workload.queryIntensity,
+        nowMs,
+        hovered,
+      })
       ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
       col++
     }
@@ -594,12 +644,51 @@ function drawRightFacadeWindows(
   ctx.restore()
 }
 
+function workloadWindowColor({
+  key,
+  row,
+  col,
+  side,
+  metricIntensity,
+  queryIntensity,
+  nowMs,
+  hovered,
+}: {
+  key: string
+  row: number
+  col: number
+  side: 'read' | 'write'
+  metricIntensity: number
+  queryIntensity: number
+  nowMs: number
+  hovered: boolean
+}): string {
+  const seed = `${key}:${side}:${row}:${col}`
+  const density = Math.min(0.96, 0.06 + metricIntensity * 0.72 + queryIntensity * 0.18)
+  const lit = metricIntensity > 0.015 && stableUnit(seed) < density
+  if (!lit) {
+    if (!hovered) return side === 'read' ? 'rgba(12, 23, 34, 0.64)' : 'rgba(18, 17, 30, 0.62)'
+    return side === 'read' ? 'rgba(86, 190, 216, 0.28)' : 'rgba(196, 88, 183, 0.25)'
+  }
+
+  const flickerSeed = stableUnit(`${seed}:flicker`) * Math.PI * 2
+  const flicker = 0.86 + 0.14 * Math.sin(nowMs * 0.006 + flickerSeed)
+  const alpha = Math.min(
+    0.9,
+    (0.24 + metricIntensity * 0.46 + queryIntensity * 0.24 + (hovered ? 0.12 : 0)) * flicker,
+  )
+  return side === 'read'
+    ? `rgba(83, 229, 255, ${alpha})`
+    : `rgba(255, 77, 218, ${alpha})`
+}
+
 function drawRoofUnits(
   ctx: CanvasRenderingContext2D,
   g: Geometry,
   top: RGB,
   hovered: boolean,
   key: string,
+  workload: WorkloadVisual,
 ): void {
   const { sx, w, h, topY } = g
   const roofColor = mix(shade(top, 0.52), { r: 120, g: 130, b: 146 }, 0.3)
@@ -614,9 +703,13 @@ function drawRoofUnits(
   ctx.fillStyle = 'rgba(108, 118, 134, 0.92)'
   ctx.fill()
 
-  const stripe = stableUnit(`${key}:roof-stripe`)
-  if (stripe > 0.36) {
-    const accent = stripe > 0.68 ? 'rgba(255, 69, 218, 0.58)' : 'rgba(69, 229, 255, 0.52)'
+  const dominantIntensity = Math.max(workload.readIntensity, workload.writeIntensity)
+  if (dominantIntensity > 0.05) {
+    const alpha = Math.min(0.75, 0.26 + dominantIntensity * 0.42 + workload.queryIntensity * 0.12)
+    const accent =
+      workload.writeIntensity > workload.readIntensity
+        ? `rgba(255, 69, 218, ${alpha})`
+        : `rgba(69, 229, 255, ${alpha})`
     ctx.beginPath()
     ctx.moveTo(sx - w * 0.46, topY + h * 0.08)
     ctx.lineTo(sx + w * 0.22, topY - h * 0.18)

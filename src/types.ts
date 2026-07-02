@@ -41,6 +41,9 @@ export interface TableNode {
   columns?: ColumnInfo[]
   // Optional activity derived from recent `system.query_log`.
   activity?: TableActivity
+  // True when recent workload could not be fetched, usually because
+  // `system.query_log` is not readable for the connected user.
+  workloadUnavailable?: boolean
 }
 
 // Stable key used to cross-reference tables (dependency edges, selection).

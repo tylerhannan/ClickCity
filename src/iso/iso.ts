@@ -60,6 +60,7 @@ interface WorkloadScale {
   maxRowsRead: number
   maxRowsWritten: number
   maxQueryCount: number
+  maxFootprint: number
 }
 
 interface WorkloadVisual {
@@ -67,6 +68,8 @@ interface WorkloadVisual {
   writeIntensity: number
   queryIntensity: number
   activityScore: number
+  structuralIntensity: number
+  unavailable: boolean
 }
 
 // Engine → base color.
@@ -382,27 +385,48 @@ function computeWorkloadScale(placed: PlacedBlock[]): WorkloadScale {
   let maxRowsRead = 0
   let maxRowsWritten = 0
   let maxQueryCount = 0
+  let maxFootprint = 0
   for (const b of placed) {
+    const footprint = tableFootprint(b.node)
+    if (footprint > maxFootprint) maxFootprint = footprint
     const a = b.node.activity
     if (!a) continue
     if (a.rowsRead > maxRowsRead) maxRowsRead = a.rowsRead
     if (a.rowsWritten > maxRowsWritten) maxRowsWritten = a.rowsWritten
     if (a.queryCount > maxQueryCount) maxQueryCount = a.queryCount
   }
-  return { maxRowsRead, maxRowsWritten, maxQueryCount }
+  return { maxRowsRead, maxRowsWritten, maxQueryCount, maxFootprint }
 }
 
 function workloadForNode(node: TableNode, scale: WorkloadScale): WorkloadVisual {
   const a = node.activity
+  const structuralIntensity = logIntensity(tableFootprint(node), scale.maxFootprint)
   if (!a) {
-    return { readIntensity: 0, writeIntensity: 0, queryIntensity: 0, activityScore: 0 }
+    return {
+      readIntensity: 0,
+      writeIntensity: 0,
+      queryIntensity: 0,
+      activityScore: 0,
+      structuralIntensity,
+      unavailable: node.workloadUnavailable ?? false,
+    }
   }
   return {
     readIntensity: logIntensity(a.rowsRead, scale.maxRowsRead),
     writeIntensity: logIntensity(a.rowsWritten, scale.maxRowsWritten),
     queryIntensity: logIntensity(a.queryCount, scale.maxQueryCount),
     activityScore: a.activityScore,
+    structuralIntensity,
+    unavailable: false,
   }
+}
+
+function tableFootprint(node: TableNode): number {
+  if (node.bytesOnDisk > 0) return node.bytesOnDisk
+  // Match the renderer's rough row fallback: enough to order tables visually,
+  // not enough to claim precise storage when bytes are unavailable.
+  if (node.rows > 0) return node.rows * 100
+  return 0
 }
 
 function logIntensity(value: number, max: number): number {
@@ -589,6 +613,8 @@ function drawLeftFacadeWindows(
         side: 'read',
         metricIntensity: workload.readIntensity,
         queryIntensity: workload.queryIntensity,
+        structuralIntensity: workload.structuralIntensity,
+        unavailable: workload.unavailable,
         nowMs,
         hovered,
       })
@@ -633,6 +659,8 @@ function drawRightFacadeWindows(
         side: 'write',
         metricIntensity: workload.writeIntensity,
         queryIntensity: workload.queryIntensity,
+        structuralIntensity: workload.structuralIntensity,
+        unavailable: workload.unavailable,
         nowMs,
         hovered,
       })
@@ -651,6 +679,8 @@ function workloadWindowColor({
   side,
   metricIntensity,
   queryIntensity,
+  structuralIntensity,
+  unavailable,
   nowMs,
   hovered,
 }: {
@@ -660,10 +690,24 @@ function workloadWindowColor({
   side: 'read' | 'write'
   metricIntensity: number
   queryIntensity: number
+  structuralIntensity: number
+  unavailable: boolean
   nowMs: number
   hovered: boolean
 }): string {
   const seed = `${key}:${side}:${row}:${col}`
+  if (unavailable) {
+    const density = Math.min(0.78, 0.16 + structuralIntensity * 0.48)
+    const lit = stableUnit(seed) < density
+    if (!lit) return side === 'read' ? 'rgba(13, 23, 31, 0.66)' : 'rgba(14, 20, 28, 0.66)'
+    const flickerSeed = stableUnit(`${seed}:structural-flicker`) * Math.PI * 2
+    const flicker = 0.92 + 0.08 * Math.sin(nowMs * 0.0022 + flickerSeed)
+    const alpha = Math.min(0.56, (0.18 + structuralIntensity * 0.22 + (hovered ? 0.1 : 0)) * flicker)
+    return side === 'read'
+      ? `rgba(133, 169, 188, ${alpha})`
+      : `rgba(104, 129, 146, ${alpha})`
+  }
+
   const density = Math.min(0.96, 0.06 + metricIntensity * 0.72 + queryIntensity * 0.18)
   const lit = metricIntensity > 0.015 && stableUnit(seed) < density
   if (!lit) {
@@ -704,7 +748,15 @@ function drawRoofUnits(
   ctx.fill()
 
   const dominantIntensity = Math.max(workload.readIntensity, workload.writeIntensity)
-  if (dominantIntensity > 0.05) {
+  if (workload.unavailable && workload.structuralIntensity > 0.05) {
+    const alpha = Math.min(0.48, 0.18 + workload.structuralIntensity * 0.24)
+    ctx.beginPath()
+    ctx.moveTo(sx - w * 0.46, topY + h * 0.08)
+    ctx.lineTo(sx + w * 0.22, topY - h * 0.18)
+    ctx.lineWidth = 1
+    ctx.strokeStyle = `rgba(135, 165, 181, ${alpha})`
+    ctx.stroke()
+  } else if (dominantIntensity > 0.05) {
     const alpha = Math.min(0.75, 0.26 + dominantIntensity * 0.42 + workload.queryIntensity * 0.12)
     const accent =
       workload.writeIntensity > workload.readIntensity

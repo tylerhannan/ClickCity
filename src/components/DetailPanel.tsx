@@ -88,6 +88,15 @@ export default function DetailPanel({ table, conn, onClose }: Props) {
           </dl>
         </section>
       )}
+      {!table.activity && table.workloadUnavailable && (
+        <section className="detail-section">
+          <h3>Recent activity (query_log)</h3>
+          <div className="muted">
+            Workload unavailable for this connection. The user may not have SELECT access
+            on system.query_log.
+          </div>
+        </section>
+      )}
 
       {table.dependencies.length > 0 && (
         <section className="detail-section">

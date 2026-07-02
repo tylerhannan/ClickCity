@@ -7,6 +7,7 @@ export default function Legend({ tables }: { tables: TableNode[] }) {
   const categories = Array.from(new Set(tables.map((t) => t.category))) as EngineCategory[]
   const databases = Array.from(new Set(tables.map((t) => t.database)))
   const hasActivity = tables.some((t) => (t.activity?.activityScore ?? 0) > 0)
+  const workloadUnavailable = tables.some((t) => t.workloadUnavailable)
 
   return (
     <div className="legend">
@@ -42,6 +43,18 @@ export default function Legend({ tables }: { tables: TableNode[] }) {
           <div className="legend-row">
             <span className="swatch activity" />
             Pulse = recent query-log activity
+          </div>
+        </div>
+      )}
+      {!hasActivity && workloadUnavailable && (
+        <div className="legend-group">
+          <div className="legend-head">Workload</div>
+          <div className="legend-row">
+            <span className="swatch structural" />
+            Muted windows = structural detail
+          </div>
+          <div className="legend-row">
+            query_log unavailable
           </div>
         </div>
       )}

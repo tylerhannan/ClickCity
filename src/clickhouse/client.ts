@@ -233,12 +233,20 @@ export async function fetchSchema(conn: Connection): Promise<TableNode[]> {
     }
   })
 
-  const activityByKey = await fetchActivityByTable(conn).catch(
-    () => new Map<string, TableActivity>(),
-  )
+  let workloadUnavailable = false
+  let activityByKey = new Map<string, TableActivity>()
+  try {
+    activityByKey = await fetchActivityByTable(conn)
+  } catch {
+    // Keep the schema visible even when `system.query_log` is restricted. The
+    // renderer uses this flag to show neutral structural windows rather than
+    // pretending to know recent read/write workload.
+    workloadUnavailable = true
+  }
   for (const node of nodes) {
     const activity = activityByKey.get(tableKey(node))
     if (activity) node.activity = activity
+    else if (workloadUnavailable) node.workloadUnavailable = true
   }
   return nodes
 }

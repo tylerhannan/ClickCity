@@ -51,8 +51,11 @@ ClickCity is a map of ClickHouse schema shape and recent workload:
   `system.query_log` boosts brightness, while rows read/written control how many
   windows light up on each face.
 - **Pulse/halo = combined recent activity.** The glow combines query count,
-  throughput, and peak memory from `system.query_log`. If query-log access is
-  denied or disabled, workload lights stay mostly dark rather than inventing data.
+  throughput, and peak memory from `system.query_log`.
+- **Muted grey-blue windows = structural detail only.** If query-log access is
+  denied or disabled, ClickCity still draws neutral window detail from table
+  footprint, and the legend flags that workload data is unavailable. It does not
+  use cyan/magenta workload colors unless `system.query_log` is readable.
 - **Red roof beacon = very large table.** Tall buildings get a small beacon so the
   biggest storage objects remain easy to spot.
 
@@ -97,6 +100,8 @@ For ClickHouse Cloud, add the site's origin to the service's allowed CORS origin
    when `system.parts` is restricted or sparse.
 4. **Recent activity** — optional aggregates from `system.query_log` over the last
    30 minutes, used for cyan read windows, magenta write windows, and pulse glow.
+   If this query is denied, buildings fall back to muted structural windows and
+   the legend calls out that workload is unavailable.
 
 Columns shown in the detail panel are fetched lazily from `system.columns` when a
 block is selected.

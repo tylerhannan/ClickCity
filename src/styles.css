@@ -299,6 +299,11 @@ button:disabled {
   box-shadow: 0 0 10px rgba(255, 77, 218, 0.42);
 }
 
+.swatch.structural {
+  background: #87a5b5;
+  box-shadow: 0 0 8px rgba(135, 165, 181, 0.28);
+}
+
 /* Detail panel */
 .detail-panel {
   position: absolute;

@@ -215,11 +215,11 @@ export async function fetchSchema(conn: Connection): Promise<TableNode[]> {
         }
 
     // `dependencies_database` and `dependencies_table` are parallel arrays.
-    const dependencies: string[] = []
+    const allDependencies: string[] = []
     const deps = t.dependencies_table ?? []
     for (let i = 0; i < deps.length; i++) {
       const db = t.dependencies_database?.[i] ?? t.database
-      dependencies.push(`${db}.${deps[i]}`)
+      allDependencies.push(`${db}.${deps[i]}`)
     }
 
     return {
@@ -229,9 +229,23 @@ export async function fetchSchema(conn: Connection): Promise<TableNode[]> {
       category: categorizeEngine(t.engine),
       bytesOnDisk: size.bytes,
       rows: size.rows,
-      dependencies,
+      dependencies: allDependencies,
     }
   })
+
+  // Keep only resolvable edges for rendering, but preserve unresolved targets so
+  // the detail panel can explain why dependency counts may differ from drawn lines.
+  const knownKeys = new Set(nodes.map((n) => tableKey(n)))
+  for (const node of nodes) {
+    const resolved: string[] = []
+    const unresolved: string[] = []
+    for (const dep of node.dependencies) {
+      if (knownKeys.has(dep)) resolved.push(dep)
+      else unresolved.push(dep)
+    }
+    node.dependencies = resolved
+    if (unresolved.length > 0) node.unresolvedDependencies = unresolved
+  }
 
   let workloadUnavailable = false
   let activityByKey = new Map<string, TableActivity>()

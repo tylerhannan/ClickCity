@@ -36,6 +36,9 @@ export interface TableNode {
   // Fully-qualified "database.table" keys this table depends on / feeds:
   // materialized-view targets, the underlying table of a Distributed engine, etc.
   dependencies: string[]
+  // Dependencies reported by ClickHouse that are not present in the fetched graph
+  // (for example hidden databases, missing privileges, or remote objects).
+  unresolvedDependencies?: string[]
   // Optional pre-loaded columns (used by mock data). For a live connection the
   // detail panel fetches columns on demand from `system.columns`.
   columns?: ColumnInfo[]

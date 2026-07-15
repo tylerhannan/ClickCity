@@ -100,9 +100,22 @@ export default function DetailPanel({ table, conn, onClose }: Props) {
 
       {table.dependencies.length > 0 && (
         <section className="detail-section">
-          <h3>Dependencies</h3>
+          <h3>Dependencies (rendered: {table.dependencies.length})</h3>
           <ul className="dep-list">
             {table.dependencies.map((d) => (
+              <li key={d}>{d}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {(table.unresolvedDependencies?.length ?? 0) > 0 && (
+        <section className="detail-section">
+          <h3>Dependencies (unresolved: {table.unresolvedDependencies!.length})</h3>
+          <div className="muted">
+            These targets are reported by ClickHouse but are outside the visible graph.
+          </div>
+          <ul className="dep-list">
+            {table.unresolvedDependencies!.map((d) => (
               <li key={d}>{d}</li>
             ))}
           </ul>

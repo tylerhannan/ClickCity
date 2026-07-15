@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { type TableNode } from './types'
 import { type Connection, fetchSchema } from './clickhouse/client'
+import { type LayoutMode } from './iso/iso'
 import { MOCK_TABLES } from './data/mockData'
 import ConnectionScreen from './components/ConnectionScreen'
 import CityCanvas from './components/CityCanvas'
@@ -14,6 +15,7 @@ export default function App() {
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isMock, setIsMock] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('natural')
 
   async function handleConnect(c: Connection) {
     setConnecting(true)
@@ -69,13 +71,32 @@ export default function App() {
           {isMock ? 'mock data' : conn?.url}
           <span className="count"> · {tables.length} tables</span>
         </div>
+        <div className="layout-toggle" role="group" aria-label="Layout mode">
+          <button
+            className={`ghost small ${layoutMode === 'natural' ? 'active' : ''}`}
+            onClick={() => setLayoutMode('natural')}
+          >
+            Natural
+          </button>
+          <button
+            className={`ghost small ${layoutMode === 'skyline' ? 'active' : ''}`}
+            onClick={() => setLayoutMode('skyline')}
+          >
+            Skyline
+          </button>
+        </div>
         <button className="ghost small" onClick={disconnect}>
           Disconnect
         </button>
       </header>
 
       <main className="stage">
-        <CityCanvas tables={tables} selected={selected} onSelect={setSelected} />
+        <CityCanvas
+          tables={tables}
+          layoutMode={layoutMode}
+          selected={selected}
+          onSelect={setSelected}
+        />
         <Legend tables={tables} />
         {selected && (
           <DetailPanel table={selected} conn={conn} onClose={() => setSelected(null)} />

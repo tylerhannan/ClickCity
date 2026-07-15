@@ -225,6 +225,17 @@ button:disabled {
   color: var(--text-tertiary);
 }
 
+.layout-toggle {
+  display: inline-flex;
+  gap: var(--space-6);
+}
+
+.layout-toggle button.active {
+  background: var(--brand-yellow-soft);
+  border-color: var(--brand-yellow);
+  color: var(--text-primary);
+}
+
 .stage {
   position: relative;
   flex: 1;

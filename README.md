@@ -35,6 +35,9 @@ ClickCity is a map of ClickHouse schema shape and recent workload:
   views, materialized views, dictionaries, and distributed tables.
 - **Neighborhoods = databases.** Tables are grouped by database, and each database
   gets a subtle tint so separate schemas read as separate districts.
+- **Layout mode controls depth bias.** Use the top-bar toggle to switch between
+  **Natural** (original ordering) and **Skyline** (taller tables biased deeper
+  within each database cluster) when dense scenes make edge endpoints hard to read.
 - **Building height = table footprint.** Height uses a log scale from
   `system.parts.bytes_on_disk`; if parts are unavailable, ClickCity falls back to
   `system.tables.total_bytes` / `total_rows`.

@@ -29,6 +29,8 @@ export interface View {
   scale: number
 }
 
+export type LayoutMode = 'natural' | 'skyline'
+
 // Per-block screen geometry at a given view.
 export interface Geometry {
   // ground-diamond centre
@@ -97,7 +99,7 @@ export const ENGINE_LABELS: Record<EngineCategory, string> = {
 // sub-grid, and the sub-grids are stacked along the gy axis with a gap row in
 // between so that databases read as distinct neighbourhoods.
 
-export function layout(tables: TableNode[]): PlacedBlock[] {
+export function layout(tables: TableNode[], mode: LayoutMode = 'natural'): PlacedBlock[] {
   const byDb = new Map<string, TableNode[]>()
   for (const t of tables) {
     const group = byDb.get(t.database)
@@ -110,8 +112,16 @@ export function layout(tables: TableNode[]): PlacedBlock[] {
   let rowOffset = 0
 
   for (const group of byDb.values()) {
+    const ordered =
+      mode === 'skyline'
+        ? [...group].sort((a, b) => {
+            const massDiff = effectiveMass(b, stats.rowsToBytes) - effectiveMass(a, stats.rowsToBytes)
+            if (massDiff !== 0) return massDiff
+            return tableKey(a).localeCompare(tableKey(b))
+          })
+        : group
     const cols = Math.max(1, Math.ceil(Math.sqrt(group.length)))
-    group.forEach((node, i) => {
+    ordered.forEach((node, i) => {
       blocks.push({
         node,
         gx: i % cols,
@@ -119,7 +129,7 @@ export function layout(tables: TableNode[]): PlacedBlock[] {
         heightPx: blockHeight(node, stats),
       })
     })
-    const rows = Math.ceil(group.length / cols)
+    const rows = Math.ceil(ordered.length / cols)
     rowOffset += rows + 1 // gap row between databases
   }
 

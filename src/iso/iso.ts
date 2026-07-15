@@ -1064,15 +1064,43 @@ function drawEdges(
         dep === opts.selectedKey ||
         fromKey === opts.hoveredKey ||
         dep === opts.hoveredKey
-      const midX = (from.topX + to.topX) / 2
-      const midY = (from.topY + to.topY) / 2 - 24 * Math.min(1, view0Scale(from, to))
+      // Route edges between lifted anchor points above rooftops. This keeps the
+      // endpoints visually unambiguous when lines pass near foreground buildings.
+      const fromLift = Math.max(12, from.h * 0.75)
+      const toLift = Math.max(12, to.h * 0.75)
+      const startX = from.topX
+      const startY = from.topY - fromLift
+      const endX = to.topX
+      const endY = to.topY - toLift
+      const midX = (startX + endX) / 2
+      const midY = (startY + endY) / 2 - 24 * Math.min(1, view0Scale(from, to))
       const edgeSeed = `${fromKey}->${dep}`
       const accent = neonAccent(edgeSeed)
       const base = highlight ? 'rgba(255, 243, 107, 0.95)' : rgbToCss(accent)
 
+      // Vertical stems make it explicit which rooftops own the edge.
       ctx.beginPath()
       ctx.moveTo(from.topX, from.topY)
-      ctx.quadraticCurveTo(midX, midY, to.topX, to.topY)
+      ctx.lineTo(startX, startY)
+      ctx.moveTo(to.topX, to.topY)
+      ctx.lineTo(endX, endY)
+      if (layer === 'under') {
+        if (focusKey && !focusedEdge) {
+          ctx.lineWidth = 1.2
+          ctx.strokeStyle = 'rgba(120, 184, 224, 0.08)'
+        } else {
+          ctx.lineWidth = highlight ? 2 : 1.4
+          ctx.strokeStyle = highlight ? 'rgba(255, 244, 164, 0.32)' : 'rgba(121, 227, 255, 0.14)'
+        }
+      } else {
+        ctx.lineWidth = highlight ? 2.2 : 1.5
+        ctx.strokeStyle = highlight ? 'rgba(255, 245, 148, 0.9)' : 'rgba(191, 236, 255, 0.74)'
+      }
+      ctx.stroke()
+
+      ctx.beginPath()
+      ctx.moveTo(startX, startY)
+      ctx.quadraticCurveTo(midX, midY, endX, endY)
       if (layer === 'under') {
         if (focusKey && !focusedEdge) {
           ctx.lineWidth = 2.8
@@ -1094,8 +1122,8 @@ function drawEdges(
         ctx.restore()
 
         ctx.beginPath()
-        ctx.moveTo(from.topX, from.topY)
-        ctx.quadraticCurveTo(midX, midY, to.topX, to.topY)
+        ctx.moveTo(startX, startY)
+        ctx.quadraticCurveTo(midX, midY, endX, endY)
         ctx.lineWidth = 0.95
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)'
         ctx.stroke()
@@ -1105,8 +1133,8 @@ function drawEdges(
         // Animated "data packet" markers make direction and connectivity readable.
         const t = (opts.nowMs * 0.00022 + stableUnit(edgeSeed)) % 1
         const t2 = (t + 0.52) % 1
-        const p1 = quadPoint(from.topX, from.topY, midX, midY, to.topX, to.topY, t)
-        const p2 = quadPoint(from.topX, from.topY, midX, midY, to.topX, to.topY, t2)
+        const p1 = quadPoint(startX, startY, midX, midY, endX, endY, t)
+        const p2 = quadPoint(startX, startY, midX, midY, endX, endY, t2)
         const packetR = highlight ? 3 : 2.2
         ctx.beginPath()
         ctx.arc(p1.x, p1.y, packetR, 0, Math.PI * 2)
@@ -1128,9 +1156,9 @@ function drawEdges(
         ctx.strokeStyle = highlight ? 'rgba(255, 244, 144, 0.72)' : 'rgba(176, 228, 255, 0.42)'
         ctx.stroke()
 
-        const head = quadPoint(from.topX, from.topY, midX, midY, to.topX, to.topY, 0.965)
-        const vx = to.topX - head.x
-        const vy = to.topY - head.y
+        const head = quadPoint(startX, startY, midX, midY, endX, endY, 0.965)
+        const vx = endX - head.x
+        const vy = endY - head.y
         const len = Math.hypot(vx, vy) || 1
         const ux = vx / len
         const uy = vy / len
@@ -1138,14 +1166,35 @@ function drawEdges(
         const py = ux
         const arrowLen = highlight ? 10 : 8
         const arrowW = highlight ? 5.5 : 4.2
-        const bx = to.topX - ux * arrowLen
-        const by = to.topY - uy * arrowLen
+        const bx = endX - ux * arrowLen
+        const by = endY - uy * arrowLen
         ctx.beginPath()
-        ctx.moveTo(to.topX, to.topY)
+        ctx.moveTo(endX, endY)
         ctx.lineTo(bx + px * arrowW, by + py * arrowW)
         ctx.lineTo(bx - px * arrowW, by - py * arrowW)
         ctx.closePath()
         ctx.fillStyle = highlight ? 'rgba(255, 245, 145, 0.95)' : 'rgba(200, 236, 255, 0.84)'
+        ctx.fill()
+      } else {
+        // Keep subtle directional hint visible even without hover/selection.
+        const head = quadPoint(startX, startY, midX, midY, endX, endY, 0.965)
+        const vx = endX - head.x
+        const vy = endY - head.y
+        const len = Math.hypot(vx, vy) || 1
+        const ux = vx / len
+        const uy = vy / len
+        const px = -uy
+        const py = ux
+        const arrowLen = highlight ? 8 : 6
+        const arrowW = highlight ? 4.4 : 3.4
+        const bx = endX - ux * arrowLen
+        const by = endY - uy * arrowLen
+        ctx.beginPath()
+        ctx.moveTo(endX, endY)
+        ctx.lineTo(bx + px * arrowW, by + py * arrowW)
+        ctx.lineTo(bx - px * arrowW, by - py * arrowW)
+        ctx.closePath()
+        ctx.fillStyle = highlight ? 'rgba(255, 244, 150, 0.45)' : 'rgba(171, 221, 247, 0.2)'
         ctx.fill()
       }
     }

@@ -1041,6 +1041,13 @@ function drawEdges(
   ctx.save()
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
+  const focusKey = opts.selectedKey ?? opts.hoveredKey
+  // Without an active focus, keep connectors behind buildings so depth cues
+  // remain truthful and lines don't appear attached to nearby foreground blocks.
+  if (layer === 'over' && !focusKey) {
+    ctx.restore()
+    return
+  }
   for (const b of placed) {
     const fromKey = tableKey(b.node)
     const from = geomByKey.get(fromKey)
@@ -1048,6 +1055,9 @@ function drawEdges(
     for (const dep of b.node.dependencies) {
       const to = geomByKey.get(dep)
       if (!to) continue
+      const focusedEdge =
+        focusKey !== null && (fromKey === focusKey || dep === focusKey)
+      if (layer === 'over' && !focusedEdge) continue
 
       const highlight =
         fromKey === opts.selectedKey ||
@@ -1064,8 +1074,15 @@ function drawEdges(
       ctx.moveTo(from.topX, from.topY)
       ctx.quadraticCurveTo(midX, midY, to.topX, to.topY)
       if (layer === 'under') {
-        ctx.lineWidth = highlight ? 6.2 : 4.8
-        ctx.strokeStyle = highlight ? 'rgba(255, 244, 164, 0.24)' : 'rgba(121, 227, 255, 0.15)'
+        if (focusKey && !focusedEdge) {
+          ctx.lineWidth = 2.8
+          ctx.strokeStyle = 'rgba(120, 184, 224, 0.07)'
+        } else {
+          ctx.lineWidth = highlight ? 6.2 : 4.2
+          ctx.strokeStyle = highlight
+            ? 'rgba(255, 244, 164, 0.24)'
+            : 'rgba(121, 227, 255, 0.12)'
+        }
         ctx.stroke()
       } else {
         ctx.save()
@@ -1100,7 +1117,7 @@ function drawEdges(
         ctx.fillStyle = highlight ? 'rgba(255, 241, 163, 0.9)' : 'rgba(182, 238, 255, 0.72)'
         ctx.fill()
 
-        // Marker at the dependency end.
+        // Marker at the dependency end + tiny arrowhead for direction.
         ctx.beginPath()
         ctx.arc(to.topX, to.topY, highlight ? 5.2 : 3.8, 0, Math.PI * 2)
         ctx.fillStyle = highlight ? '#fff36b' : 'rgba(207, 236, 255, 0.78)'
@@ -1110,6 +1127,26 @@ function drawEdges(
         ctx.lineWidth = 1
         ctx.strokeStyle = highlight ? 'rgba(255, 244, 144, 0.72)' : 'rgba(176, 228, 255, 0.42)'
         ctx.stroke()
+
+        const head = quadPoint(from.topX, from.topY, midX, midY, to.topX, to.topY, 0.965)
+        const vx = to.topX - head.x
+        const vy = to.topY - head.y
+        const len = Math.hypot(vx, vy) || 1
+        const ux = vx / len
+        const uy = vy / len
+        const px = -uy
+        const py = ux
+        const arrowLen = highlight ? 10 : 8
+        const arrowW = highlight ? 5.5 : 4.2
+        const bx = to.topX - ux * arrowLen
+        const by = to.topY - uy * arrowLen
+        ctx.beginPath()
+        ctx.moveTo(to.topX, to.topY)
+        ctx.lineTo(bx + px * arrowW, by + py * arrowW)
+        ctx.lineTo(bx - px * arrowW, by - py * arrowW)
+        ctx.closePath()
+        ctx.fillStyle = highlight ? 'rgba(255, 245, 145, 0.95)' : 'rgba(200, 236, 255, 0.84)'
+        ctx.fill()
       }
     }
   }

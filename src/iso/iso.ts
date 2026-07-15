@@ -1042,12 +1042,6 @@ function drawEdges(
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   const focusKey = opts.selectedKey ?? opts.hoveredKey
-  // Without an active focus, keep connectors behind buildings so depth cues
-  // remain truthful and lines don't appear attached to nearby foreground blocks.
-  if (layer === 'over' && !focusKey) {
-    ctx.restore()
-    return
-  }
   for (const b of placed) {
     const fromKey = tableKey(b.node)
     const from = geomByKey.get(fromKey)
@@ -1057,7 +1051,6 @@ function drawEdges(
       if (!to) continue
       const focusedEdge =
         focusKey !== null && (fromKey === focusKey || dep === focusKey)
-      if (layer === 'over' && !focusedEdge) continue
 
       const highlight =
         fromKey === opts.selectedKey ||
@@ -1113,68 +1106,59 @@ function drawEdges(
         }
         ctx.stroke()
       } else {
-        ctx.save()
-        ctx.shadowBlur = highlight ? 18 : 11
-        ctx.shadowColor = highlight ? 'rgba(255, 242, 122, 0.9)' : `${base.replace('rgb(', 'rgba(').replace(')', ', 0.78)')}`
-        ctx.lineWidth = highlight ? 2.8 : 2.05
-        ctx.strokeStyle = highlight ? '#fff36b' : base
-        ctx.stroke()
-        ctx.restore()
+        if (focusedEdge) {
+          ctx.save()
+          ctx.shadowBlur = highlight ? 18 : 11
+          ctx.shadowColor = highlight
+            ? 'rgba(255, 242, 122, 0.9)'
+            : `${base.replace('rgb(', 'rgba(').replace(')', ', 0.78)')}`
+          ctx.lineWidth = highlight ? 2.8 : 2.05
+          ctx.strokeStyle = highlight ? '#fff36b' : base
+          ctx.stroke()
+          ctx.restore()
 
-        ctx.beginPath()
-        ctx.moveTo(startX, startY)
-        ctx.quadraticCurveTo(midX, midY, endX, endY)
-        ctx.lineWidth = 0.95
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)'
-        ctx.stroke()
+          ctx.beginPath()
+          ctx.moveTo(startX, startY)
+          ctx.quadraticCurveTo(midX, midY, endX, endY)
+          ctx.lineWidth = 0.95
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)'
+          ctx.stroke()
+        } else {
+          // Keep unfocused live edges visible above dense skylines, but subtle.
+          ctx.lineWidth = 1.15
+          ctx.strokeStyle = 'rgba(168, 214, 242, 0.28)'
+          ctx.stroke()
+        }
       }
 
       if (layer === 'over') {
-        // Animated "data packet" markers make direction and connectivity readable.
-        const t = (opts.nowMs * 0.00022 + stableUnit(edgeSeed)) % 1
-        const t2 = (t + 0.52) % 1
-        const p1 = quadPoint(startX, startY, midX, midY, endX, endY, t)
-        const p2 = quadPoint(startX, startY, midX, midY, endX, endY, t2)
-        const packetR = highlight ? 3 : 2.2
-        ctx.beginPath()
-        ctx.arc(p1.x, p1.y, packetR, 0, Math.PI * 2)
-        ctx.fillStyle = highlight ? '#fff8ab' : 'rgba(207, 248, 255, 0.86)'
-        ctx.fill()
-        ctx.beginPath()
-        ctx.arc(p2.x, p2.y, packetR * 0.82, 0, Math.PI * 2)
-        ctx.fillStyle = highlight ? 'rgba(255, 241, 163, 0.9)' : 'rgba(182, 238, 255, 0.72)'
-        ctx.fill()
+        if (focusedEdge) {
+          // Animated "data packet" markers make direction and connectivity readable.
+          const t = (opts.nowMs * 0.00022 + stableUnit(edgeSeed)) % 1
+          const t2 = (t + 0.52) % 1
+          const p1 = quadPoint(startX, startY, midX, midY, endX, endY, t)
+          const p2 = quadPoint(startX, startY, midX, midY, endX, endY, t2)
+          const packetR = highlight ? 3 : 2.2
+          ctx.beginPath()
+          ctx.arc(p1.x, p1.y, packetR, 0, Math.PI * 2)
+          ctx.fillStyle = highlight ? '#fff8ab' : 'rgba(207, 248, 255, 0.86)'
+          ctx.fill()
+          ctx.beginPath()
+          ctx.arc(p2.x, p2.y, packetR * 0.82, 0, Math.PI * 2)
+          ctx.fillStyle = highlight ? 'rgba(255, 241, 163, 0.9)' : 'rgba(182, 238, 255, 0.72)'
+          ctx.fill()
 
-        // Marker at the dependency end + tiny arrowhead for direction.
-        ctx.beginPath()
-        ctx.arc(to.topX, to.topY, highlight ? 5.2 : 3.8, 0, Math.PI * 2)
-        ctx.fillStyle = highlight ? '#fff36b' : 'rgba(207, 236, 255, 0.78)'
-        ctx.fill()
-        ctx.beginPath()
-        ctx.arc(to.topX, to.topY, highlight ? 7.8 : 5.7, 0, Math.PI * 2)
-        ctx.lineWidth = 1
-        ctx.strokeStyle = highlight ? 'rgba(255, 244, 144, 0.72)' : 'rgba(176, 228, 255, 0.42)'
-        ctx.stroke()
-
-        const head = quadPoint(startX, startY, midX, midY, endX, endY, 0.965)
-        const vx = endX - head.x
-        const vy = endY - head.y
-        const len = Math.hypot(vx, vy) || 1
-        const ux = vx / len
-        const uy = vy / len
-        const px = -uy
-        const py = ux
-        const arrowLen = highlight ? 10 : 8
-        const arrowW = highlight ? 5.5 : 4.2
-        const bx = endX - ux * arrowLen
-        const by = endY - uy * arrowLen
-        ctx.beginPath()
-        ctx.moveTo(endX, endY)
-        ctx.lineTo(bx + px * arrowW, by + py * arrowW)
-        ctx.lineTo(bx - px * arrowW, by - py * arrowW)
-        ctx.closePath()
-        ctx.fillStyle = highlight ? 'rgba(255, 245, 145, 0.95)' : 'rgba(200, 236, 255, 0.84)'
-        ctx.fill()
+          // Marker at the dependency end + tiny arrowhead for direction.
+          ctx.beginPath()
+          ctx.arc(to.topX, to.topY, highlight ? 5.2 : 3.8, 0, Math.PI * 2)
+          ctx.fillStyle = highlight ? '#fff36b' : 'rgba(207, 236, 255, 0.78)'
+          ctx.fill()
+          ctx.beginPath()
+          ctx.arc(to.topX, to.topY, highlight ? 7.8 : 5.7, 0, Math.PI * 2)
+          ctx.lineWidth = 1
+          ctx.strokeStyle = highlight ? 'rgba(255, 244, 144, 0.72)' : 'rgba(176, 228, 255, 0.42)'
+          ctx.stroke()
+        }
       } else {
         // Keep subtle directional hint visible even without hover/selection.
         const head = quadPoint(startX, startY, midX, midY, endX, endY, 0.965)

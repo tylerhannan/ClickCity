@@ -43,6 +43,11 @@ ClickCity is a map of ClickHouse schema shape and recent workload:
 - **Connector lines = dependencies.** These come from
   `system.tables.dependencies_database` and `dependencies_table`; they make
   materialized-view chains and distributed-table relationships visible.
+- **Some dependencies may be unresolved.** ClickCity draws connectors only when
+  the target exists in the fetched graph; if ClickHouse reports targets outside
+  that visible set (for example due to permissions, filtered databases, or
+  remote/absent objects), they appear under **Dependencies (unresolved)** in
+  the detail panel.
 - **Cyan windows = rows read recently.** Read heat comes from
   `system.query_log.rows_read`, normalized on a log scale against the busiest table.
 - **Magenta windows = rows written recently.** Write heat comes from

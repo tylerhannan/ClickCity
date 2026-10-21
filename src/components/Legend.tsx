@@ -44,18 +44,28 @@ export default function Legend({ tables }: { tables: TableNode[] }) {
             <span className="swatch activity" />
             Pulse = recent query-log activity
           </div>
+          <div className="legend-row">
+            <span className="swatch connector" />
+            Arcs = table dependencies
+          </div>
         </div>
       )}
-      {!hasActivity && workloadUnavailable && (
+      {!hasActivity && (
         <div className="legend-group">
-          <div className="legend-head">Workload</div>
+          <div className="legend-head">Map</div>
           <div className="legend-row">
-            <span className="swatch structural" />
-            Muted windows = structural detail
+            <span className="swatch connector" />
+            Arcs = table dependencies
           </div>
-          <div className="legend-row">
-            query_log unavailable
-          </div>
+          {workloadUnavailable && (
+            <>
+              <div className="legend-row">
+                <span className="swatch structural" />
+                Muted windows = structural detail
+              </div>
+              <div className="legend-row">query_log unavailable</div>
+            </>
+          )}
         </div>
       )}
     </div>

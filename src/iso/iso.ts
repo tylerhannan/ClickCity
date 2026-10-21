@@ -230,13 +230,13 @@ export function fitView(placed: PlacedBlock[], cw: number, ch: number): View {
 
   const contentW = Math.max(1, maxX - minX)
   const contentH = Math.max(1, maxY - minY)
-  const scale = Math.min((cw / contentW) * 0.9, (ch / contentH) * 0.82, 2.05)
+  const scale = Math.min((cw / contentW) * 0.94, (ch / contentH) * 0.88, 2.2)
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
   return {
     offsetX: cw / 2 - centerX * scale,
     // Bias slightly low so rooftops have air while the city still sits in frame.
-    offsetY: ch * 0.52 - centerY * scale,
+    offsetY: ch * 0.54 - centerY * scale,
     scale,
   }
 }
@@ -339,6 +339,7 @@ export function drawScene(
 
   drawAtmosphere(ctx, opts.nowMs, bounds)
   drawCityPlane(ctx, placed, view, bounds, opts.nowMs)
+  drawDistrictPads(ctx, placed, view)
   drawEdges(ctx, placed, geomByKey, opts, 'under')
   drawLots(ctx, order, geomByKey)
 
@@ -356,6 +357,8 @@ export function drawScene(
   }
 
   drawEdges(ctx, placed, geomByKey, opts, 'over')
+  drawFocusLabels(ctx, placed, geomByKey, opts)
+  drawVignette(ctx)
 }
 
 function sceneBounds(geomByKey: Map<string, Geometry>): SceneBounds {
@@ -469,6 +472,16 @@ function drawCuboid(
   ctx.fillStyle = 'rgba(10, 14, 23, 0.58)'
   ctx.fill()
 
+  if (state.selected || state.hovered) {
+    ctx.save()
+    ctx.globalCompositeOperation = 'screen'
+    ctx.beginPath()
+    ctx.ellipse(sx, sy + h * 0.28, w * 1.75, h * 0.95, 0, 0, Math.PI * 2)
+    ctx.fillStyle = state.selected ? 'rgba(250, 255, 105, 0.28)' : 'rgba(90, 230, 255, 0.18)'
+    ctx.fill()
+    ctx.restore()
+  }
+
   // Diffuse shadow for hazy depth.
   ctx.beginPath()
   ctx.ellipse(sx + w * 0.22, sy + h * 0.78, w * 1.02, h * 0.58, 0, 0, Math.PI * 2)
@@ -549,12 +562,21 @@ function drawCuboid(
   ctx.stroke()
 
   if (H > 120) {
+    const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(state.nowMs * 0.006 + H))
+    ctx.save()
+    ctx.shadowBlur = 10 + pulse * 12
+    ctx.shadowColor = `rgba(255, 72, 96, ${0.55 + pulse * 0.35})`
     ctx.beginPath()
     ctx.moveTo(sx + w * 0.1, topY - h * 0.12)
-    ctx.lineTo(sx + w * 0.1, topY - h * 0.52)
-    ctx.lineWidth = 1.15
-    ctx.strokeStyle = 'rgba(255, 72, 72, 0.76)'
+    ctx.lineTo(sx + w * 0.1, topY - h * 0.62)
+    ctx.lineWidth = 1.35
+    ctx.strokeStyle = `rgba(255, 86, 96, ${0.7 + pulse * 0.25})`
     ctx.stroke()
+    ctx.beginPath()
+    ctx.arc(sx + w * 0.1, topY - h * 0.64, 2.1 + pulse * 0.8, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(255, 120, 120, ${0.75 + pulse * 0.2})`
+    ctx.fill()
+    ctx.restore()
   }
 }
 
@@ -616,19 +638,25 @@ function drawLeftFacadeWindows(
   for (let y = topY + rowStep * 0.6; y < sy + h - rowStep * 0.35; y += rowStep) {
     let col = 0
     for (let x = sx - w + colStep * 0.55; x < sx - colStep * 0.25; x += colStep) {
-      ctx.fillStyle = workloadWindowColor({
-        key,
-        row,
-        col,
-        side: 'read',
-        metricIntensity: workload.readIntensity,
-        queryIntensity: workload.queryIntensity,
-        structuralIntensity: workload.structuralIntensity,
-        unavailable: workload.unavailable,
-        nowMs,
-        hovered,
-      })
-      ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
+      paintWindow(
+        ctx,
+        x,
+        y,
+        winW,
+        winH,
+        workloadWindowColor({
+          key,
+          row,
+          col,
+          side: 'read',
+          metricIntensity: workload.readIntensity,
+          queryIntensity: workload.queryIntensity,
+          structuralIntensity: workload.structuralIntensity,
+          unavailable: workload.unavailable,
+          nowMs,
+          hovered,
+        }),
+      )
       col++
     }
     row++
@@ -662,24 +690,46 @@ function drawRightFacadeWindows(
   for (let y = topY + rowStep * 0.6; y < sy + h - rowStep * 0.35; y += rowStep) {
     let col = 0
     for (let x = sx + colStep * 0.2; x < sx + w - colStep * 0.2; x += colStep) {
-      ctx.fillStyle = workloadWindowColor({
-        key,
-        row,
-        col,
-        side: 'write',
-        metricIntensity: workload.writeIntensity,
-        queryIntensity: workload.queryIntensity,
-        structuralIntensity: workload.structuralIntensity,
-        unavailable: workload.unavailable,
-        nowMs,
-        hovered,
-      })
-      ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
+      paintWindow(
+        ctx,
+        x,
+        y,
+        winW,
+        winH,
+        workloadWindowColor({
+          key,
+          row,
+          col,
+          side: 'write',
+          metricIntensity: workload.writeIntensity,
+          queryIntensity: workload.queryIntensity,
+          structuralIntensity: workload.structuralIntensity,
+          unavailable: workload.unavailable,
+          nowMs,
+          hovered,
+        }),
+      )
       col++
     }
     row++
   }
   ctx.restore()
+}
+
+function paintWindow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  winW: number,
+  winH: number,
+  paint: { fill: string; glow: string | null },
+): void {
+  if (paint.glow) {
+    ctx.fillStyle = paint.glow
+    ctx.fillRect(x - winW * 1.05, y - winH * 1.05, winW * 2.1, winH * 2.1)
+  }
+  ctx.fillStyle = paint.fill
+  ctx.fillRect(x - winW * 0.5, y - winH * 0.5, winW, winH)
 }
 
 function workloadWindowColor({
@@ -704,36 +754,52 @@ function workloadWindowColor({
   unavailable: boolean
   nowMs: number
   hovered: boolean
-}): string {
+}): { fill: string; glow: string | null } {
   const seed = `${key}:${side}:${row}:${col}`
   if (unavailable) {
     const density = Math.min(0.78, 0.16 + structuralIntensity * 0.48)
     const lit = stableUnit(seed) < density
-    if (!lit) return side === 'read' ? 'rgba(13, 23, 31, 0.66)' : 'rgba(14, 20, 28, 0.66)'
+    if (!lit) {
+      return {
+        fill: side === 'read' ? 'rgba(13, 23, 31, 0.66)' : 'rgba(14, 20, 28, 0.66)',
+        glow: null,
+      }
+    }
     const flickerSeed = stableUnit(`${seed}:structural-flicker`) * Math.PI * 2
     const flicker = 0.92 + 0.08 * Math.sin(nowMs * 0.0022 + flickerSeed)
     const alpha = Math.min(0.56, (0.18 + structuralIntensity * 0.22 + (hovered ? 0.1 : 0)) * flicker)
-    return side === 'read'
-      ? `rgba(133, 169, 188, ${alpha})`
-      : `rgba(104, 129, 146, ${alpha})`
+    const fill =
+      side === 'read' ? `rgba(133, 169, 188, ${alpha})` : `rgba(104, 129, 146, ${alpha})`
+    return { fill, glow: `rgba(133, 169, 188, ${alpha * 0.22})` }
   }
 
   const density = Math.min(0.96, 0.06 + metricIntensity * 0.72 + queryIntensity * 0.18)
   const lit = metricIntensity > 0.015 && stableUnit(seed) < density
   if (!lit) {
-    if (!hovered) return side === 'read' ? 'rgba(12, 23, 34, 0.64)' : 'rgba(18, 17, 30, 0.62)'
-    return side === 'read' ? 'rgba(86, 190, 216, 0.28)' : 'rgba(196, 88, 183, 0.25)'
+    if (!hovered) {
+      return {
+        fill: side === 'read' ? 'rgba(12, 23, 34, 0.64)' : 'rgba(18, 17, 30, 0.62)',
+        glow: null,
+      }
+    }
+    return {
+      fill: side === 'read' ? 'rgba(86, 190, 216, 0.28)' : 'rgba(196, 88, 183, 0.25)',
+      glow: null,
+    }
   }
 
   const flickerSeed = stableUnit(`${seed}:flicker`) * Math.PI * 2
   const flicker = 0.86 + 0.14 * Math.sin(nowMs * 0.006 + flickerSeed)
   const alpha = Math.min(
-    0.9,
-    (0.24 + metricIntensity * 0.46 + queryIntensity * 0.24 + (hovered ? 0.12 : 0)) * flicker,
+    0.94,
+    (0.28 + metricIntensity * 0.5 + queryIntensity * 0.24 + (hovered ? 0.12 : 0)) * flicker,
   )
-  return side === 'read'
-    ? `rgba(83, 229, 255, ${alpha})`
-    : `rgba(255, 77, 218, ${alpha})`
+  const fill = side === 'read' ? `rgba(83, 229, 255, ${alpha})` : `rgba(255, 77, 218, ${alpha})`
+  const glow =
+    side === 'read'
+      ? `rgba(83, 229, 255, ${Math.min(0.38, alpha * 0.42)})`
+      : `rgba(255, 77, 218, ${Math.min(0.38, alpha * 0.42)})`
+  return { fill, glow }
 }
 
 function drawRoofUnits(
@@ -830,21 +896,151 @@ function drawAtmosphere(ctx: CanvasRenderingContext2D, nowMs: number, bounds: Sc
   ctx.fillRect(0, 0, cw, ch)
 
   drawFarHaze(ctx, bounds, nowMs)
+  drawStars(ctx, nowMs)
 
   // Sparse rain streaks for cyberpunk atmosphere.
   ctx.save()
-  ctx.strokeStyle = 'rgba(170, 208, 255, 0.08)'
   ctx.lineWidth = 1
-  const drift = nowMs * 0.015
-  for (let i = 0; i < 86; i++) {
-    const x = ((i * 97.13 + drift * 1.7) % (cw + 80)) - 40
-    const y = ((i * 53.79 + drift * 2.6) % (ch + 120)) - 60
+  const drift = nowMs * 0.018
+  for (let i = 0; i < 110; i++) {
+    const x = ((i * 97.13 + drift * 1.9) % (cw + 80)) - 40
+    const y = ((i * 53.79 + drift * 3.1) % (ch + 120)) - 60
+    ctx.strokeStyle = i % 7 === 0 ? 'rgba(190, 230, 255, 0.16)' : 'rgba(170, 208, 255, 0.08)'
     ctx.beginPath()
     ctx.moveTo(x, y)
-    ctx.lineTo(x - 6, y + 16)
+    ctx.lineTo(x - 7, y + 18)
     ctx.stroke()
   }
   ctx.restore()
+}
+
+function drawStars(ctx: CanvasRenderingContext2D, nowMs: number): void {
+  const { cw, ch } = canvasCssSize(ctx)
+  ctx.save()
+  for (let i = 0; i < 48; i++) {
+    const x = stableUnit(`star:x:${i}`) * cw
+    const y = stableUnit(`star:y:${i}`) * ch * 0.46
+    const twinkle = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(nowMs * 0.0022 + i * 1.7))
+    const r = 0.6 + stableUnit(`star:r:${i}`) * 1.3
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(210, 232, 255, ${0.18 + twinkle * 0.45})`
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawDistrictPads(
+  ctx: CanvasRenderingContext2D,
+  placed: PlacedBlock[],
+  view: View,
+): void {
+  const byDb = new Map<string, PlacedBlock[]>()
+  for (const b of placed) {
+    const group = byDb.get(b.node.database)
+    if (group) group.push(b)
+    else byDb.set(b.node.database, [b])
+  }
+
+  for (const [db, blocks] of byDb) {
+    let minGx = Infinity
+    let maxGx = -Infinity
+    let minGy = Infinity
+    let maxGy = -Infinity
+    for (const b of blocks) {
+      if (b.gx < minGx) minGx = b.gx
+      if (b.gx > maxGx) maxGx = b.gx
+      if (b.gy < minGy) minGy = b.gy
+      if (b.gy > maxGy) maxGy = b.gy
+    }
+    const pad = 0.38
+    const corners = [
+      projectGrid(minGx - pad, minGy - pad, view),
+      projectGrid(maxGx + 1 + pad, minGy - pad, view),
+      projectGrid(maxGx + 1 + pad, maxGy + 1 + pad, view),
+      projectGrid(minGx - pad, maxGy + 1 + pad, view),
+    ]
+    const tint = dbTintRgb(db)
+    ctx.beginPath()
+    corners.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y)
+      else ctx.lineTo(p.x, p.y)
+    })
+    ctx.closePath()
+    ctx.fillStyle = rgbToRgba(mix({ r: 6, g: 12, b: 22 }, tint, 0.32), 0.2)
+    ctx.fill()
+    ctx.lineWidth = 1.35
+    ctx.strokeStyle = rgbToRgba(mix(tint, { r: 180, g: 230, b: 255 }, 0.4), 0.46)
+    ctx.stroke()
+
+    const front = projectGrid((minGx + maxGx + 1) / 2, maxGy + 1 + pad * 0.35, view)
+    ctx.font = '600 11px Inter, "SF Pro Text", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillStyle = rgbToRgba(mix(tint, { r: 236, g: 246, b: 255 }, 0.62), 0.9)
+    ctx.fillText(db, front.x, front.y + 10)
+  }
+}
+
+function drawFocusLabels(
+  ctx: CanvasRenderingContext2D,
+  placed: PlacedBlock[],
+  geomByKey: Map<string, Geometry>,
+  opts: DrawOptions,
+): void {
+  const keys = [opts.hoveredKey, opts.selectedKey].filter((k, i, all): k is string => !!k && all.indexOf(k) === i)
+  if (keys.length === 0) return
+  const byKey = new Map(placed.map((b) => [tableKey(b.node), b.node]))
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.font = '650 12px "SFMono-Regular", Menlo, Monaco, Consolas, monospace'
+  for (const key of keys) {
+    const node = byKey.get(key)
+    const g = geomByKey.get(key)
+    if (!node || !g) continue
+    const label = `${node.database}.${node.name}`
+    const x = g.topX
+    const y = g.topY - g.h - 10
+    const width = ctx.measureText(label).width
+    const selected = key === opts.selectedKey
+    ctx.beginPath()
+    roundRect(ctx, x - width / 2 - 8, y - 18, width + 16, 20, 6)
+    ctx.fillStyle = selected ? 'rgba(20, 24, 18, 0.86)' : 'rgba(8, 16, 28, 0.82)'
+    ctx.fill()
+    ctx.lineWidth = 1
+    ctx.strokeStyle = selected ? 'rgba(250, 255, 105, 0.7)' : 'rgba(90, 230, 255, 0.55)'
+    ctx.stroke()
+    ctx.fillStyle = selected ? '#faff69' : '#e7f7ff'
+    ctx.fillText(label, x, y - 3)
+  }
+  ctx.restore()
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const rr = Math.min(r, w / 2, h / 2)
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
+}
+
+function drawVignette(ctx: CanvasRenderingContext2D): void {
+  const { cw, ch } = canvasCssSize(ctx)
+  const g = ctx.createRadialGradient(cw * 0.5, ch * 0.46, Math.min(cw, ch) * 0.22, cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.72)
+  g.addColorStop(0, 'rgba(0, 0, 0, 0)')
+  g.addColorStop(1, 'rgba(2, 6, 12, 0.42)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, cw, ch)
 }
 
 function canvasCssSize(ctx: CanvasRenderingContext2D): { cw: number; ch: number } {
@@ -1135,29 +1331,29 @@ function drawEdges(
           ctx.stroke()
         } else {
           // Keep unfocused live edges visible above dense skylines, but subtle.
-          ctx.lineWidth = 1.15
-          ctx.strokeStyle = 'rgba(168, 214, 242, 0.28)'
+          ctx.lineWidth = 1.35
+          ctx.strokeStyle = 'rgba(168, 224, 255, 0.42)'
           ctx.stroke()
         }
       }
 
       if (layer === 'over') {
-        if (focusedEdge) {
           // Animated "data packet" markers make direction and connectivity readable.
-          const t = (opts.nowMs * 0.00022 + stableUnit(edgeSeed)) % 1
+          const t = (opts.nowMs * 0.00028 + stableUnit(edgeSeed)) % 1
           const t2 = (t + 0.52) % 1
           const p1 = quadPoint(startX, startY, midX, midY, endX, endY, t)
           const p2 = quadPoint(startX, startY, midX, midY, endX, endY, t2)
-          const packetR = highlight ? 3 : 2.2
+          const packetR = focusedEdge ? (highlight ? 3.4 : 2.5) : 1.8
           ctx.beginPath()
           ctx.arc(p1.x, p1.y, packetR, 0, Math.PI * 2)
-          ctx.fillStyle = highlight ? '#fff8ab' : 'rgba(207, 248, 255, 0.86)'
+          ctx.fillStyle = highlight ? '#fff8ab' : focusedEdge ? 'rgba(207, 248, 255, 0.9)' : 'rgba(140, 228, 255, 0.55)'
           ctx.fill()
           ctx.beginPath()
           ctx.arc(p2.x, p2.y, packetR * 0.82, 0, Math.PI * 2)
-          ctx.fillStyle = highlight ? 'rgba(255, 241, 163, 0.9)' : 'rgba(182, 238, 255, 0.72)'
+          ctx.fillStyle = highlight ? 'rgba(255, 241, 163, 0.9)' : 'rgba(182, 238, 255, 0.48)'
           ctx.fill()
 
+        if (focusedEdge) {
           // Marker at the dependency end + tiny arrowhead for direction.
           ctx.beginPath()
           ctx.arc(to.topX, to.topY, highlight ? 5.2 : 3.8, 0, Math.PI * 2)

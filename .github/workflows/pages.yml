@@ -1,3 +1,7 @@
+# Publishes the Vite build to GitHub Pages on every push to main.
+# Repo setting: Settings → Pages → Source = GitHub Actions.
+# Live URL: https://tylerhannan.github.io/ClickCity/
+# VITE_BASE is derived from the repo name so asset paths survive a rename.
 name: Deploy GitHub Pages
 
 on:

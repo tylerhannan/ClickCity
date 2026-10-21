@@ -10,7 +10,10 @@ Click a block to inspect the table.
 Pure frontend — no backend. The browser queries `system.tables` and `system.parts`
 directly over the ClickHouse HTTP interface. Deploys as a static site to GitHub Pages.
 
-![mock city](docs/screenshot.png)
+**[Live demo](https://tylerhannan.github.io/ClickCity/)** — open the GitHub Pages app and
+click **Explore with mock data**. No ClickHouse required.
+
+[![mock city](docs/screenshot.png)](https://tylerhannan.github.io/ClickCity/)
 
 ## Stack
 
@@ -113,34 +116,6 @@ For ClickHouse Cloud, add the site's origin to the service's allowed CORS origin
 
 Columns shown in the detail panel are fetched lazily from `system.columns` when a
 block is selected.
-
-## Deploy to GitHub Pages
-
-### Automatic deploy on push (recommended)
-
-This repo includes `.github/workflows/pages.yml`, which builds and deploys to
-GitHub Pages on every push to `main`.
-
-In repository settings:
-
-1. Open **Settings → Pages**
-2. Set **Source** to **GitHub Actions**
-3. Push `main`
-
-The workflow computes `VITE_BASE` from the repo name, so project-page asset
-paths stay correct after a rename.
-
-### Manual deploy to `gh-pages` branch
-
-```bash
-npm run deploy        # builds and pushes dist/ to the gh-pages branch
-```
-
-Then in the repository settings set **Pages → Source → `gh-pages` branch**. The
-site will be served from `https://<user>.github.io/ClickCity/`.
-
-The Vite `base` is set to `/ClickCity/` in `vite.config.ts`. If you rename the repo,
-either change `base` or build with `VITE_BASE=/<new-name>/ npm run build`.
 
 ## Project layout
 

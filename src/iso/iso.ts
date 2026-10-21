@@ -228,13 +228,13 @@ export function fitView(placed: PlacedBlock[], cw: number, ch: number): View {
     }
   }
 
-  const contentW = Math.max(1, maxX - minX)
+  const contentW = Math.max(1, maxX - minX) + 96
   const contentH = Math.max(1, maxY - minY)
   const scale = Math.min((cw / contentW) * 0.94, (ch / contentH) * 0.88, 2.2)
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
   return {
-    offsetX: cw / 2 - centerX * scale,
+    offsetX: cw / 2 - centerX * scale - 28,
     // Bias slightly low so rooftops have air while the city still sits in frame.
     offsetY: ch * 0.54 - centerY * scale,
     scale,
@@ -942,6 +942,10 @@ function drawDistrictPads(
     else byDb.set(b.node.database, [b])
   }
 
+  ctx.font = '650 12px Inter, "SF Pro Text", sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+
   for (const [db, blocks] of byDb) {
     let minGx = Infinity
     let maxGx = -Infinity
@@ -973,12 +977,16 @@ function drawDistrictPads(
     ctx.strokeStyle = rgbToRgba(mix(tint, { r: 180, g: 230, b: 255 }, 0.4), 0.46)
     ctx.stroke()
 
-    const front = projectGrid((minGx + maxGx + 1) / 2, maxGy + 1 + pad * 0.35, view)
-    ctx.font = '600 11px Inter, "SF Pro Text", sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
-    ctx.fillStyle = rgbToRgba(mix(tint, { r: 236, g: 246, b: 255 }, 0.62), 0.9)
-    ctx.fillText(db, front.x, front.y + 10)
+    // Hug this district's right edge — not the canvas right.
+    const lx = Math.max(...corners.map((p) => p.x)) + 8
+    const ly = corners.reduce((sum, p) => sum + p.y, 0) / corners.length
+    const labelW = ctx.measureText(db).width
+    ctx.beginPath()
+    roundRect(ctx, lx - 8, ly - 10, labelW + 16, 20, 6)
+    ctx.fillStyle = 'rgba(6, 12, 22, 0.78)'
+    ctx.fill()
+    ctx.fillStyle = rgbToRgba(mix(tint, { r: 236, g: 246, b: 255 }, 0.62), 0.95)
+    ctx.fillText(db, lx, ly)
   }
 }
 
